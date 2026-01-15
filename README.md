@@ -59,7 +59,7 @@ This approach delivers what runtime reflection simply cannot: perfect accuracy, 
 
 ### 1. Install
 ```bash
-npm install nest-scramble
+pnpm add nest-scramble
 ```
 
 ### 2. Import Module
@@ -150,7 +150,7 @@ GET /scramble-mock/users/123
 
 ### CLI Generation
 ```bash
-npx nest-scramble generate src --output my-api.json
+pnpm dlx nest-scramble generate src --output my-api.json
 ```
 
 ### Programmatic API
@@ -166,7 +166,7 @@ const spec = transformer.transform(controllers);
 
 ### Watch Mode
 ```bash
-npm run watch-generate
+pnpm run watch-generate
 ```
 Automatically regenerates docs on file changes.
 

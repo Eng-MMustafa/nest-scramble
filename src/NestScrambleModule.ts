@@ -28,18 +28,22 @@ export class NestScrambleModule {
       sourcePath = 'src',
     } = options;
 
-    // Scan controllers and generate spec
     const scanner = new ScannerService();
     const controllers = scanner.scanControllers(sourcePath);
     const transformer = new OpenApiTransformer(baseUrl);
     const openApiSpec = transformer.transform(controllers, 'NestJS API', '1.0.0', baseUrl);
 
-    // Auto export Postman if enabled
     if (autoExportPostman) {
       const generator = new PostmanCollectionGenerator(baseUrl);
       const collection = generator.generateCollection(controllers);
       require('fs').writeFileSync(postmanOutputPath, JSON.stringify(collection, null, 2));
+      console.log(`[Nest-Scramble] Postman collection exported to ${postmanOutputPath}`);
     }
+
+    const port = baseUrl.split(':').pop() || '3000';
+    console.log(`\n🚀 [Nest-Scramble] Documentation engine initialized`);
+    console.log(`📚 [Nest-Scramble] Docs available at http://localhost:${port}/docs`);
+    console.log(`📄 [Nest-Scramble] OpenAPI JSON at http://localhost:${port}/docs/json\n`);
 
     return {
       module: NestScrambleModule,

@@ -28,7 +28,8 @@ export class ScannerService {
 
   constructor() {
     this.project = new Project({
-      tsConfigFilePath: 'tsconfig.json', // Assume tsconfig.json exists
+      tsConfigFilePath: 'tsconfig.json',
+      skipAddingFilesFromTsConfig: true,
     });
   }
 
@@ -38,15 +39,27 @@ export class ScannerService {
    * @returns Array of ControllerInfo
    */
   scanControllers(sourcePath: string): ControllerInfo[] {
-    // Add source files to the project
-    this.project.addSourceFilesAtPaths(`${sourcePath}/**/*.ts`);
+    const projectRoot = process.cwd();
+    const fullSourcePath = `${projectRoot}/${sourcePath}`;
+    
+    try {
+      this.project.addSourceFilesAtPaths(`${fullSourcePath}/**/*.ts`);
+    } catch (error) {
+      console.warn(`[Nest-Scramble] Warning: Could not add source files from ${fullSourcePath}`);
+    }
 
     const controllers: ControllerInfo[] = [];
 
-    // Find all classes decorated with @Controller
     const controllerClasses = this.project.getSourceFiles()
       .flatMap(file => file.getClasses())
       .filter(cls => this.hasControllerDecorator(cls));
+
+    if (controllerClasses.length === 0) {
+      console.warn(`[Nest-Scramble] No controllers found in /${sourcePath}. Please check your sourcePath config.`);
+      console.warn(`[Nest-Scramble] Looking in: ${fullSourcePath}`);
+    } else {
+      console.log(`[Nest-Scramble] Found ${controllerClasses.length} controller(s) in /${sourcePath}`);
+    }
 
     for (const controllerClass of controllerClasses) {
       const controllerInfo = this.extractControllerInfo(controllerClass);
