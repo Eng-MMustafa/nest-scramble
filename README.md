@@ -12,8 +12,8 @@
 As a NestJS developer, I was tired of drowning in `@ApiProperty` decorators just to get basic API documentation. I longed for a zero-config solution where docs just worked without polluting my code. **Nest-Scramble changes that** by using static TypeScript analysis to automatically generate:
 
 - ✅ **OpenAPI 3.0 specifications** from your DTOs
+- ✅ **Interactive Scalar UI documentation** with zero configuration
 - ✅ **Postman collections** with smart mock data
-- ✅ **Interactive documentation** with code samples
 - ✅ **Live mocking** for rapid prototyping
 
 **Zero configuration. Zero decorators. Just pure TypeScript.**
@@ -57,58 +57,86 @@ This approach delivers what runtime reflection simply cannot: perfect accuracy, 
 
 ## ⚡ Quick Start (3 Steps)
 
-### 1. Install
+### 1. Install the Package
+
 ```bash
+# Using npm
+npm install nest-scramble
+
+# Using yarn
+yarn add nest-scramble
+
+# Using pnpm
 pnpm add nest-scramble
 ```
 
-### 2. Import Module
+### 2. Import Module in Your NestJS App
+
+Open your `app.module.ts` (or main module) and add:
+
 ```typescript
-// app.module.ts
+import { Module } from '@nestjs/common';
 import { NestScrambleModule } from 'nest-scramble';
 
 @Module({
   imports: [
+    // Your other modules...
     NestScrambleModule.forRoot({
-      enableMock: true,
-      autoExportPostman: true,
+      sourcePath: 'src',           // Path to your source code
+      baseUrl: 'http://localhost:3000',
+      enableMock: true,            // Enable mock endpoints
+      autoExportPostman: false,    // Auto-generate Postman collection
     }),
   ],
 })
 export class AppModule {}
 ```
 
-### 3. Visit Documentation
-- **📖 API Docs**: http://localhost:3000/docs
-- **🎭 Live Mocking**: http://localhost:3000/scramble-mock/users
-- **📤 Postman Collection**: Auto-generated at `collection.json`
+### 3. Start Your App and Visit Documentation
 
-![Zero-config setup demo](demo.gif)
+```bash
+npm run start:dev
+```
 
-## ⚙️ Configuration API
+Then open your browser:
+
+- **📖 Interactive API Docs (Scalar UI)**: http://localhost:3000/docs
+- **📄 OpenAPI JSON Spec**: http://localhost:3000/docs-json
+- **🎭 Mock Endpoints**: http://localhost:3000/scramble-mock/*
+- **📤 Postman Collection**: Auto-generated at `collection.json` (if enabled)
+
+**That's it!** Nest-Scramble will automatically scan your controllers and generate beautiful documentation.
+
+## ⚙️ Configuration Options
 
 ```typescript
 NestScrambleModule.forRoot({
-  // Documentation path
-  path: '/docs', // default: '/docs'
+  // Source directory to scan for controllers
+  sourcePath: 'src',                    // default: 'src'
 
-  // Enable live mocking
-  enableMock: true, // default: true
+  // API base URL for OpenAPI spec
+  baseUrl: 'http://localhost:3000',     // default: 'http://localhost:3000'
 
-  // Auto-export Postman collection
-  autoExportPostman: true, // default: false
+  // Enable live mocking middleware
+  enableMock: true,                     // default: true
 
-  // Output paths
-  postmanOutputPath: 'collection.json',
-  openApiOutputPath: 'openapi.json',
+  // Auto-export Postman collection on startup
+  autoExportPostman: false,             // default: false
 
-  // API base URL
-  baseUrl: 'http://localhost:3000',
-
-  // Source directory to scan
-  sourcePath: 'src', // default: 'src'
+  // Postman collection output path
+  postmanOutputPath: 'collection.json', // default: 'collection.json'
 })
 ```
+
+### Configuration Details
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `sourcePath` | `string` | `'src'` | Directory where your NestJS controllers are located |
+| `baseUrl` | `string` | `'http://localhost:3000'` | Base URL for your API (used in OpenAPI spec) |
+| `enableMock` | `boolean` | `true` | Enable `/scramble-mock/*` endpoints for testing |
+| `autoExportPostman` | `boolean` | `false` | Automatically generate Postman collection file |
+| `postmanOutputPath` | `string` | `'collection.json'` | Output path for Postman collection |
 
 ## 🎭 Live Mocking Guide
 
@@ -170,36 +198,43 @@ pnpm run watch-generate
 ```
 Automatically regenerates docs on file changes.
 
-## 🎨 UI Integration
+## 🎨 Documentation UI
 
-### Using Scalar UI
-For the modern Scalar documentation UI:
+### Built-in Scalar UI
 
-```typescript
-import { ApiReference } from '@scalar/nestjs';
+Nest-Scramble comes with **Scalar UI** built-in via CDN. No additional packages needed!
 
-@Module({
-  imports: [
-    NestScrambleModule.forRoot(),
-    ApiReference({
-      path: '/docs',
-      spec: {
-        content: () => {
-          const scanner = new ScannerService();
-          const controllers = scanner.scanControllers('src');
-          const transformer = new OpenApiTransformer();
-          return transformer.transform(controllers);
-        },
-      },
-    }),
-  ],
-})
-export class AppModule {}
+When you visit `http://localhost:3000/docs`, you'll see a beautiful, interactive API documentation interface with:
+
+- 🎯 **Interactive API Explorer** - Test endpoints directly from the browser
+- 📝 **Auto-generated Examples** - Request/response samples for all endpoints
+- 🔍 **Search Functionality** - Quickly find endpoints
+- 🌙 **Dark Mode Support** - Easy on the eyes
+- 📱 **Mobile Responsive** - Works on all devices
+
+### Available Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /docs` | Interactive Scalar UI documentation |
+| `GET /docs-json` | OpenAPI 3.0 JSON specification |
+| `GET /docs/json` | Legacy endpoint (same as above) |
+| `GET /docs/spec` | OpenAPI spec as JSON response |
+
+### Accessing the OpenAPI Spec
+
+You can use the OpenAPI JSON with other tools:
+
+```bash
+# Download the spec
+curl http://localhost:3000/docs-json > openapi.json
+
+# Use with Swagger UI
+docker run -p 8080:8080 -e SWAGGER_JSON=/openapi.json -v $(pwd):/usr/share/nginx/html/openapi.json swaggerapi/swagger-ui
+
+# Import into Postman
+# File > Import > Link > http://localhost:3000/docs-json
 ```
-
-*Note: If `@scalar/nestjs` is not available, the default HTML UI is served.*
-
-![Scalar UI demo](ui-demo.gif)
 
 ## ✅ Supported Features
 
@@ -260,26 +295,116 @@ Run the demo to verify everything works perfectly.
 
 ### Common Issues
 
-**TypeScript Path Mapping Issues:**
-If you're using custom `tsconfig` paths, ensure the scanner can resolve them:
-```json
-{
-  "compilerOptions": {
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"]
-    }
-  }
+#### 1. **"No controllers found" Warning**
+
+If you see this warning on startup:
+```
+[Nest-Scramble] No controllers found in /src. Please check your sourcePath config.
+```
+
+**Solution:**
+- Ensure your `sourcePath` option points to the correct directory containing your controllers
+- Check that your controllers use the `@Controller()` decorator from `@nestjs/common`
+- Verify your project structure matches the configured path
+
+```typescript
+NestScrambleModule.forRoot({
+  sourcePath: 'src', // Make sure this matches your project structure
+})
+```
+
+#### 2. **UI Not Loading / Blank Page at /docs**
+
+**Solution:**
+- Clear your browser cache and hard refresh (Ctrl+Shift+R / Cmd+Shift+R)
+- Check browser console for errors
+- Verify the `/docs-json` endpoint returns valid JSON
+- Ensure you're using version 1.1.0 or higher: `npm list nest-scramble`
+
+#### 3. **TypeScript Compilation Errors**
+
+If you get errors like `Cannot find module 'nest-scramble'`:
+
+**Solution:**
+```bash
+# Clear node_modules and reinstall
+rm -rf node_modules package-lock.json
+npm install
+
+# Rebuild your project
+npm run build
+```
+
+#### 4. **pnpm Dependency Conflicts**
+
+If using pnpm and getting peer dependency warnings:
+
+**Solution:**
+Nest-Scramble v1.1.0+ properly declares peer dependencies. Update to the latest version:
+```bash
+pnpm update nest-scramble
+```
+
+#### 5. **Controllers Not Being Scanned**
+
+The scanner looks in your **host project's** `src` folder, not the library's folder.
+
+**Diagnostic Steps:**
+1. Check the startup logs - they show exactly where the scanner is looking:
+   ```
+   [Nest-Scramble] Scanning directory: /path/to/your/project/src
+   [Nest-Scramble] Found X controller(s)
+   ```
+
+2. Ensure your controllers are in TypeScript files (`.ts`) not JavaScript (`.js`)
+
+3. Verify your `tsconfig.json` exists in the project root
+
+#### 6. **Mock Endpoints Not Working**
+
+If `/scramble-mock/*` returns 404:
+
+**Solution:**
+- Ensure `enableMock: true` in your configuration
+- The middleware applies to all routes matching `/scramble-mock/*`
+- Example: `http://localhost:3000/scramble-mock/users/123`
+
+#### 7. **OpenAPI Spec is Empty or Incomplete**
+
+**Solution:**
+- Ensure your DTOs are TypeScript classes or interfaces (not plain objects)
+- Check that your controller methods have proper return type annotations
+- Verify decorators are imported from `@nestjs/common`
+
+```typescript
+// ✅ Good - Explicit return type
+@Get(':id')
+getUser(@Param('id') id: string): UserDto {
+  return this.userService.findOne(id);
+}
+
+// ❌ Bad - No return type
+@Get(':id')
+getUser(@Param('id') id: string) {
+  return this.userService.findOne(id);
 }
 ```
 
-**Circular Reference Errors:**
-Nest-Scramble auto-detects circular references, but if you encounter issues, simplify your DTOs or use interfaces instead of classes.
+### Getting Help
 
-**Mock Data Not Generating:**
-Ensure `@faker-js/faker` is installed and your property names follow common conventions (e.g., `email`, `name`).
+If you're still experiencing issues:
 
-For more help, check the [issues](https://github.com/Eng-MMustafa/nest-scramble/issues) or start a discussion.
+1. **Check the logs** - Nest-Scramble provides detailed diagnostic output on startup
+2. **Verify your version** - Run `npm list nest-scramble` (should be 1.1.0+)
+3. **Open an issue** - [GitHub Issues](https://github.com/Eng-MMustafa/nest-scramble/issues)
+4. **Join discussions** - [GitHub Discussions](https://github.com/Eng-MMustafa/nest-scramble/discussions)
+
+When reporting issues, please include:
+- Nest-Scramble version
+- NestJS version
+- Package manager (npm/yarn/pnpm)
+- Startup logs
+- Sample controller code
 
 ## 🤝 Contributing
 
