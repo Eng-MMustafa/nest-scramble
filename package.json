@@ -1,6 +1,6 @@
 {
   "name": "nest-scramble",
-  "version": "1.4.6",
+  "version": "1.4.7",
   "description": "A next-generation, decorator-free API documentation engine and intelligent mock server for NestJS, engineered by Mohamed Mustafa",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
