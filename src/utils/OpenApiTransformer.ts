@@ -240,6 +240,14 @@ export class OpenApiTransformer {
       };
     }
 
+    if (type.enumValues && type.enumValues.length > 0) {
+      return {
+        type: 'string',
+        enum: type.enumValues,
+        example: type.enumValues[0],
+      };
+    }
+
     if (type.unionTypes) {
       return {
         oneOf: type.unionTypes.map(t => this.typeStringToSchema(t)),
@@ -260,9 +268,9 @@ export class OpenApiTransformer {
             propSchema.description = prop.description;
           }
           
-          // Add smart example based on property name
-          if (!propSchema.example && !propSchema.$ref) {
-            propSchema.example = this.generateSmartExample(prop.name, prop.type.type);
+          // Add smart example based on property name (only for non-ref schemas)
+          if (!propSchema.$ref && !propSchema.example) {
+            propSchema.example = this.generateSmartExample(prop.name, prop.type.type, prop.type.enumValues);
           }
           
           properties[prop.name] = propSchema;
@@ -272,10 +280,20 @@ export class OpenApiTransformer {
           }
         }
 
+        // Create the schema with examples at the schema level
+        const schemaExample: Record<string, any> = {};
+        for (const prop of type.properties) {
+          // Include all required fields in example
+          if (!prop.type.isOptional) {
+            schemaExample[prop.name] = this.generateSmartExample(prop.name, prop.type.type, prop.type.enumValues);
+          }
+        }
+
         this.schemas[schemaName] = {
           type: 'object',
           properties,
           required: required.length > 0 ? required : undefined,
+          example: schemaExample,
         };
       }
 
@@ -312,9 +330,14 @@ export class OpenApiTransformer {
     return samples;
   }
 
-  private generateSmartExample(propertyName: string, propertyType: string): any {
+  private generateSmartExample(propertyName: string, propertyType: string, enumValues?: string[]): any {
     const lowerName = propertyName.toLowerCase();
     const lowerType = propertyType.toLowerCase();
+
+    // If enum values are provided, return the first one
+    if (enumValues && enumValues.length > 0) {
+      return enumValues[0];
+    }
 
     // Email patterns
     if (lowerName.includes('email')) {

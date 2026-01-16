@@ -7,6 +7,7 @@ export interface AnalyzedType {
   isOptional: boolean;
   properties?: PropertyInfo[];
   unionTypes?: string[];
+  enumValues?: string[];
 }
 
 export interface PropertyInfo {
@@ -41,21 +42,73 @@ export class DtoAnalyzer {
     try {
       const symbol = type.getSymbol();
 
+      // Unwrap Promise<T> to get T
+      if (typeText.startsWith('Promise<') && typeText.endsWith('>')) {
+        const typeArgs = type.getTypeArguments();
+        if (typeArgs.length > 0) {
+          return this.analyzeType(typeArgs[0], isOptional);
+        }
+      }
+
       // Check if it's an array
       const arrayElementType = type.getArrayElementType();
       if (arrayElementType) {
         const elementAnalysis = this.analyzeType(arrayElementType);
         return {
-          type: typeText,
+          type: elementAnalysis.type || typeText,
           isArray: true,
           isOptional,
           properties: elementAnalysis.properties,
         };
       }
 
+      // Check if it's an enum
+      if (symbol) {
+        const declarations = symbol.getDeclarations();
+        for (const decl of declarations) {
+          if (Node.isEnumDeclaration(decl)) {
+            const enumValues = decl.getMembers().map(member => {
+              const initializer = member.getInitializer();
+              if (initializer && Node.isStringLiteral(initializer)) {
+                return initializer.getLiteralValue();
+              }
+              return member.getName();
+            });
+            return {
+              type: decl.getName() || symbol.getName() || typeText,
+              isArray: false,
+              isOptional,
+              enumValues,
+            };
+          }
+        }
+      }
+
       // Check if it's a union type
       const unionTypes = type.getUnionTypes();
       if (unionTypes.length > 1) {
+        // Check if it's a string literal union (acts like an enum)
+        const literalValues: string[] = [];
+        let allLiterals = true;
+        
+        for (const unionType of unionTypes) {
+          if (unionType.isStringLiteral()) {
+            literalValues.push(unionType.getLiteralValue() as string);
+          } else {
+            allLiterals = false;
+            break;
+          }
+        }
+        
+        if (allLiterals && literalValues.length > 0) {
+          return {
+            type: 'string',
+            isArray: false,
+            isOptional,
+            enumValues: literalValues,
+          };
+        }
+        
         return {
           type: typeText,
           isArray: false,
@@ -70,8 +123,10 @@ export class DtoAnalyzer {
         for (const decl of declarations) {
           if (Node.isClassDeclaration(decl) || Node.isInterfaceDeclaration(decl)) {
             const properties = this.extractProperties(decl);
+            // Use the class/interface name instead of full type text
+            const className = decl.getName() || symbol.getName() || typeText;
             return {
-              type: typeText,
+              type: className,
               isArray: false,
               isOptional,
               properties,
