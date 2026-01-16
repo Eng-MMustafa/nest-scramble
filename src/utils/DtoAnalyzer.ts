@@ -12,6 +12,7 @@ export interface AnalyzedType {
 export interface PropertyInfo {
   name: string;
   type: AnalyzedType;
+  description?: string;
 }
 
 export class DtoAnalyzer {
@@ -100,9 +101,20 @@ export class DtoAnalyzer {
       const isOptional = prop.hasQuestionToken ? prop.hasQuestionToken() : false;
       const analyzedType = this.analyzeType(type, isOptional);
 
+      // Extract JSDoc description
+      const jsDocs = prop.getJsDocs();
+      let description: string | undefined;
+      if (jsDocs.length > 0) {
+        const comment = jsDocs[0].getDescription().trim();
+        if (comment) {
+          description = comment;
+        }
+      }
+
       properties.push({
         name,
         type: analyzedType,
+        description,
       });
     }
 

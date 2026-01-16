@@ -6,6 +6,7 @@ export interface ControllerInfo {
   name: string;
   path: string;
   methods: MethodInfo[];
+  hasGuards?: boolean;
 }
 
 export interface MethodInfo {
@@ -14,12 +15,14 @@ export interface MethodInfo {
   route: string;
   parameters: ParameterInfo[];
   returnType: AnalyzedType;
+  hasGuards?: boolean;
 }
 
 export interface ParameterInfo {
   name: string;
   type: AnalyzedType;
   decorator?: string;
+  parameterLocation?: 'path' | 'query' | 'header' | 'body';
 }
 
 export class ScannerService {
@@ -122,6 +125,14 @@ export class ScannerService {
 
     const controllerPath = this.extractDecoratorArgument(controllerDecorator) || '';
 
+    // Check for class-level @UseGuards() decorator
+    const hasGuards = cls.getDecorators().some(decorator => {
+      const callExpression = decorator.getCallExpression();
+      if (!callExpression) return false;
+      const expression = callExpression.getExpression();
+      return Node.isIdentifier(expression) && expression.getText() === 'UseGuards';
+    });
+
     const methods: MethodInfo[] = [];
 
     for (const method of cls.getMethods()) {
@@ -135,6 +146,7 @@ export class ScannerService {
       name: cls.getName() || 'UnknownController',
       path: controllerPath,
       methods,
+      hasGuards,
     };
   }
 
@@ -167,11 +179,35 @@ export class ScannerService {
     const httpMethod = expression.getText().toUpperCase();
     const route = this.extractDecoratorArgument(httpDecorator) || '';
 
-    const parameters: ParameterInfo[] = method.getParameters().map(param => ({
-      name: param.getName(),
-      type: this.dtoAnalyzer.analyzeType(param.getType()),
-      decorator: param.getDecorators().map(d => d.getText()).join(' '),
-    }));
+    // Check for @UseGuards() decorator
+    const hasGuards = method.getDecorators().some(decorator => {
+      const callExpression = decorator.getCallExpression();
+      if (!callExpression) return false;
+      const expression = callExpression.getExpression();
+      return Node.isIdentifier(expression) && expression.getText() === 'UseGuards';
+    });
+
+    const parameters: ParameterInfo[] = method.getParameters().map(param => {
+      const decoratorText = param.getDecorators().map(d => d.getText()).join(' ');
+      let parameterLocation: 'path' | 'query' | 'header' | 'body' | undefined;
+
+      if (decoratorText.includes('@Body')) {
+        parameterLocation = 'body';
+      } else if (decoratorText.includes('@Param')) {
+        parameterLocation = 'path';
+      } else if (decoratorText.includes('@Query')) {
+        parameterLocation = 'query';
+      } else if (decoratorText.includes('@Headers')) {
+        parameterLocation = 'header';
+      }
+
+      return {
+        name: param.getName(),
+        type: this.dtoAnalyzer.analyzeType(param.getType()),
+        decorator: decoratorText,
+        parameterLocation,
+      };
+    });
 
     const returnType = this.dtoAnalyzer.analyzeType(method.getReturnType());
 
@@ -181,6 +217,7 @@ export class ScannerService {
       route,
       parameters,
       returnType,
+      hasGuards,
     };
   }
 }
