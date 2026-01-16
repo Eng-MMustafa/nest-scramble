@@ -344,28 +344,63 @@ jobs:
           path: openapi.json
 ```
 
-## 🎨 Documentation UI - World-Class Design
+## 🎨 Documentation UI - Professional API Dashboard
 
-### ✨ Futuristic Theme (NEW!)
+### ✨ Elite Dashboard Design (NEW!)
 
-Nest-Scramble now features a **bespoke, futuristic dashboard** that rivals high-end SaaS products like Stripe, Vercel, and Linear!
+Nest-Scramble features a **professional, high-end API dashboard** inspired by Stripe and Postman, where each request is displayed on a separate page for focused documentation!
 
 **🚀 Key Features:**
-- **Deep Space Dark Mode** - Ultra-premium `#050505` background
-- **Glassmorphism Design** - Backdrop blur effects on all cards
-- **Cyber Gradients** - Cyan-to-purple button animations
-- **Animated Grid Background** - Subtle pulsing effect
-- **Night Owl Code Theme** - Beautiful syntax highlighting
-- **Custom Scrollbar** - Gradient styling throughout
-- **Spotlight Search** - Cmd+K style search experience
-- **Easter Egg Console** - Hidden developer messages ✨
+- **Sidebar-Only Navigation** - Fixed 320px sidebar with controller grouping
+- **Single-Request Per Page** - Each endpoint gets its own dedicated view
+- **Three-Column Elite Layout** - Information | Request Editor | Test Panel
+- **Deep Black Background** - Professional `#000000` and `#0B0E14` theme
+- **Cyber-Cyan Accents** - `#00f2ff` for active states and primary actions
+- **Vibrant HTTP Method Badges** - Color-coded with glow effects:
+  - GET = Royal Blue (`#3B82F6`)
+  - POST = Emerald Green (`#10B981`)
+  - PUT = Amber Orange (`#F59E0B`)
+  - PATCH = Violet Purple (`#8B5CF6`)
+  - DELETE = Vibrant Red (`#EF4444`)
+- **Glassmorphism Effects** - Backdrop blur on request/response panels
+- **40px Spacious Padding** - Premium whitespace throughout
+- **Terminal-Style Response** - Black box with green text for API responses
+- **High-Contrast Labels** - Required, Type, and Default badges
+- **Custom Scrollbars** - Gradient cyan-to-purple styling
+- **Plus Jakarta Sans Typography** - Modern, professional font family
+- **Powered by Badge** - Animated branding with pulse effect
+
+### 📐 Three-Column Elite Interface
+
+The dashboard uses a professional three-column layout for each endpoint:
+
+**Column 1 (Left) - Information Panel:**
+- Endpoint title with large, bold typography
+- HTTP method badge with vibrant colors and glow
+- Endpoint description and documentation
+- Clean parameters table with high-contrast labels
+- Type information and required field indicators
+
+**Column 2 (Middle) - Request Body Editor:**
+- Glassmorphism design with backdrop blur
+- Auto-filled mock data examples
+- JSON editor with syntax highlighting
+- Copy-to-clipboard functionality
+- Real-time validation
+
+**Column 3 (Right) - Test Request Panel:**
+- Enhanced glassmorphism with cyan border glow
+- Large "Send Request" button with gradient animation
+- Terminal-style response viewer (black background, green text)
+- Status code indicators
+- Response headers display
 
 ### 🎨 Theme Customization
 
 **Futuristic Theme (Default):**
 ```typescript
 NestScrambleModule.forRoot({
-  theme: 'futuristic',           // Modern, dark, glassmorphic
+  theme: 'futuristic',           // Professional dark dashboard
   primaryColor: '#00f2ff',       // Cyber-Cyan (default)
   customDomainIcon: '/logo.png', // Your brand favicon
   apiTitle: 'My Awesome API',
@@ -406,14 +441,16 @@ NestScrambleModule.forRoot({
 
 When you visit `http://localhost:3000/docs`, you'll experience:
 
-- 🎯 **Interactive API Explorer** - Test endpoints directly from the browser
-- 📝 **Auto-generated Examples** - Request/response samples for all endpoints
-- 🔍 **Spotlight Search** - Quickly find endpoints with glowing focus states
-- 🌙 **Futuristic Dark Mode** - Deep space theme with glassmorphism
-- 📱 **Mobile Responsive** - Works beautifully on all devices
-- 🎨 **Theme Toggle** - Switch between Futuristic and Classic (top-right button)
-- ✨ **Powered by Badge** - Glowing brand badge with pulse animation
-- 🎭 **Easter Eggs** - Check your browser console for surprises!
+- 🎯 **Single-Request Navigation** - Each endpoint on its own dedicated page
+- 📂 **Controller Grouping** - Organized sidebar with uppercase section headers
+- 🎨 **Active State Glow** - Cyber-cyan highlight for selected endpoints
+- 📝 **Auto-generated Examples** - Pre-filled mock data in request editor
+- 🧪 **Live Testing** - Send requests directly from the three-column interface
+- 💻 **Terminal Response** - Black box with green text for authentic feel
+- 🔍 **Quick Search** - Press 'K' to search endpoints instantly
+- 📱 **Responsive Design** - Adapts to mobile, tablet, and desktop
+- ✨ **Animated Branding** - Pulsing "Powered by Nest-Scramble" badge
+- 🎭 **Developer Easter Eggs** - Check your browser console for surprises!
 
 ### 🖥️ Terminal Dashboard
 

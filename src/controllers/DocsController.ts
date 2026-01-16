@@ -37,41 +37,44 @@ export class DocsController {
   <div id="api-reference"></div>
   <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
   <script>
-    // Scalar Configuration for Single-Request Dashboard
+    // Professional Dashboard Configuration - Single Request Per Page
     const configuration = {
       spec: {
         url: '/docs-json'
       },
       layout: 'modern',
-      theme: 'purple',
+      theme: 'none',
       darkMode: true,
       showSidebar: true,
       hideModels: false,
       hideDownloadButton: false,
-      customCss: \`
-        /* Force sidebar-first layout */
-        .scalar-api-reference {
-          display: flex !important;
-          flex-direction: row !important;
+      defaultOpenAllTags: true,
+      searchHotKey: 'k',
+      servers: [
+        {
+          url: '${this.options.baseUrl || 'http://localhost:3000'}',
+          description: 'Development Server'
         }
-        
-        /* Hide the all-in-one scroll view */
-        [class*="scroll-container"],
-        [class*="all-endpoints"] {
-          display: none !important;
-        }
-        
-        /* Ensure single endpoint view */
-        [class*="endpoint-container"] {
-          display: block !important;
-        }
-      \`
+      ]
     };
     
-    // Initialize Scalar
+    // Initialize Scalar with error handling
     const apiReference = document.getElementById('api-reference');
-    if (apiReference && window.ScalarApiReference) {
-      window.ScalarApiReference.mount(apiReference, configuration);
+    if (apiReference) {
+      // Wait for Scalar to load
+      const initScalar = () => {
+        if (window.ScalarApiReference) {
+          try {
+            window.ScalarApiReference.mount(apiReference, configuration);
+            console.log('%c✅ Nest-Scramble Dashboard Loaded', 'color: #00f2ff; font-weight: bold;');
+          } catch (error) {
+            console.error('Scalar initialization error:', error);
+          }
+        } else {
+          setTimeout(initScalar, 100);
+        }
+      };
+      initScalar();
     }
     
     ${this.getEasterEggScript()}
@@ -85,42 +88,39 @@ export class DocsController {
 
   private getFuturisticCSS(primaryColor: string): string {
     return `
-    /* 🎨 Single-Request Dashboard by Mohamed Mustafa - Extreme Minimalism */
+    /* 🚀 Professional API Dashboard by Mohamed Mustafa - Stripe/Postman Inspired */
     :root {
       --primary-cyber: ${primaryColor};
       --primary-glow: ${primaryColor}60;
       --primary-soft: ${primaryColor}15;
+      --purple-electric: #8B5CF6;
       
-      /* Dark Mode Colors */
+      /* Deep Black Background */
+      --deep-black: #000000;
       --deep-charcoal: #0B0E14;
       --sidebar-dark: #13161C;
       --content-dark: #0B0E14;
-      --card-dark: #1A1D24;
-      --border-dark: #2A2D35;
+      --card-bg: #1A1D24;
+      --border-subtle: #2A2D35;
       
-      /* Light Mode Colors */
-      --off-white: #F9FAFB;
-      --sidebar-light: #FFFFFF;
-      --content-light: #F9FAFB;
-      --card-light: #FFFFFF;
-      --border-light: #E5E7EB;
+      /* Text Colors - High Contrast */
+      --text-primary: #FFFFFF;
+      --text-secondary: #D1D5DB;
+      --text-muted: #9CA3AF;
       
-      /* Text Colors */
-      --text-primary: #F9FAFB;
-      --text-secondary: #9CA3AF;
-      --text-muted: #6B7280;
+      /* HTTP Method Colors */
+      --get-blue: #3B82F6;
+      --post-green: #10B981;
+      --put-orange: #F59E0B;
+      --patch-purple: #8B5CF6;
+      --delete-red: #EF4444;
       
-      /* Glow Badge Colors */
-      --neon-blue: #3B82F6;
-      --neon-blue-glow: rgba(59, 130, 246, 0.5);
-      --emerald-green: #10B981;
-      --emerald-glow: rgba(16, 185, 129, 0.5);
-      --soft-rose: #F43F5E;
-      --rose-glow: rgba(244, 63, 94, 0.5);
-      --amber-orange: #F59E0B;
-      --amber-glow: rgba(245, 158, 11, 0.5);
-      --violet-purple: #8B5CF6;
-      --violet-glow: rgba(139, 92, 246, 0.5);
+      /* Danger & Info */
+      --danger-red: #F85149;
+      --info-blue: #58A6FF;
+      
+      /* Glow Effects */
+      --glow-shadow: 0 0 30px var(--primary-glow), 0 8px 24px rgba(0, 242, 255, 0.3);
     }
 
     /* ============================================
@@ -174,7 +174,7 @@ export class DocsController {
       width: 320px !important;
       height: 100vh !important;
       background: var(--sidebar-dark) !important;
-      border-right: 1px solid var(--border-dark) !important;
+      border-right: 1px solid var(--border-subtle) !important;
       overflow-y: auto !important;
       z-index: 1000 !important;
       padding: 0 !important;
@@ -191,11 +191,11 @@ export class DocsController {
       font-size: 18px;
       font-weight: 800;
       color: var(--text-primary);
-      background: linear-gradient(135deg, var(--primary-cyber), var(--violet-purple));
+      background: linear-gradient(135deg, var(--primary-cyber), var(--purple-electric));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
-      border-bottom: 1px solid var(--border-dark);
+      border-bottom: 1px solid var(--border-subtle);
       letter-spacing: -0.5px;
     }
 
@@ -212,7 +212,7 @@ export class DocsController {
 
     .sidebar::-webkit-scrollbar-thumb,
     [class*="sidebar"]::-webkit-scrollbar-thumb {
-      background: var(--border-dark);
+      background: var(--border-subtle);
       border-radius: 3px;
     }
 
@@ -237,7 +237,7 @@ export class DocsController {
       padding: 24px 24px 12px 24px !important;
       margin: 0 !important;
       background: transparent !important;
-      border-top: 1px solid var(--border-dark) !important;
+      border-top: 1px solid var(--border-subtle) !important;
       margin-top: 16px !important;
     }
 
@@ -354,108 +354,108 @@ export class DocsController {
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
 
-    /* GET - Neon Blue Glow */
+    /* GET - Royal Blue */
     [class*="method-get"],
     [class*="badge-get"],
     [data-method="get"],
     [data-method="GET"],
     .http-method-get {
-      background: var(--neon-blue) !important;
+      background: var(--get-blue) !important;
       color: #ffffff !important;
       box-shadow: 
-        0 0 20px var(--neon-blue-glow),
+        0 0 20px rgba(59, 130, 246, 0.5),
         0 4px 16px rgba(59, 130, 246, 0.4) !important;
     }
 
     [class*="method-get"]:hover,
     [data-method="get"]:hover {
       box-shadow: 
-        0 0 30px var(--neon-blue-glow),
+        0 0 30px rgba(59, 130, 246, 0.6),
         0 6px 20px rgba(59, 130, 246, 0.5) !important;
       transform: translateY(-2px) !important;
     }
 
-    /* POST - Emerald Green Glow */
+    /* POST - Emerald Green */
     [class*="method-post"],
     [class*="badge-post"],
     [data-method="post"],
     [data-method="POST"],
     .http-method-post {
-      background: var(--emerald-green) !important;
+      background: var(--post-green) !important;
       color: #ffffff !important;
       box-shadow: 
-        0 0 20px var(--emerald-glow),
+        0 0 20px rgba(16, 185, 129, 0.5),
         0 4px 16px rgba(16, 185, 129, 0.4) !important;
     }
 
     [class*="method-post"]:hover,
     [data-method="post"]:hover {
       box-shadow: 
-        0 0 30px var(--emerald-glow),
+        0 0 30px rgba(16, 185, 129, 0.6),
         0 6px 20px rgba(16, 185, 129, 0.5) !important;
       transform: translateY(-2px) !important;
     }
 
-    /* PUT - Amber Orange Glow */
+    /* PUT - Amber Orange */
     [class*="method-put"],
     [class*="badge-put"],
     [data-method="put"],
     [data-method="PUT"],
     .http-method-put {
-      background: var(--amber-orange) !important;
+      background: var(--put-orange) !important;
       color: #ffffff !important;
       box-shadow: 
-        0 0 20px var(--amber-glow),
+        0 0 20px rgba(245, 158, 11, 0.5),
         0 4px 16px rgba(245, 158, 11, 0.4) !important;
     }
 
     [class*="method-put"]:hover,
     [data-method="put"]:hover {
       box-shadow: 
-        0 0 30px var(--amber-glow),
+        0 0 30px rgba(245, 158, 11, 0.6),
         0 6px 20px rgba(245, 158, 11, 0.5) !important;
       transform: translateY(-2px) !important;
     }
 
-    /* PATCH - Violet Purple Glow */
+    /* PATCH - Violet Purple */
     [class*="method-patch"],
     [class*="badge-patch"],
     [data-method="patch"],
     [data-method="PATCH"],
     .http-method-patch {
-      background: var(--violet-purple) !important;
+      background: var(--patch-purple) !important;
       color: #ffffff !important;
       box-shadow: 
-        0 0 20px var(--violet-glow),
+        0 0 20px rgba(139, 92, 246, 0.5),
         0 4px 16px rgba(139, 92, 246, 0.4) !important;
     }
 
     [class*="method-patch"]:hover,
     [data-method="patch"]:hover {
       box-shadow: 
-        0 0 30px var(--violet-glow),
+        0 0 30px rgba(139, 92, 246, 0.6),
         0 6px 20px rgba(139, 92, 246, 0.5) !important;
       transform: translateY(-2px) !important;
     }
 
-    /* DELETE - Soft Rose Glow */
+    /* DELETE - Vibrant Red */
     [class*="method-delete"],
     [class*="badge-delete"],
     [data-method="delete"],
     [data-method="DELETE"],
     .http-method-delete {
-      background: var(--soft-rose) !important;
+      background: var(--delete-red) !important;
       color: #ffffff !important;
       box-shadow: 
-        0 0 20px var(--rose-glow),
-        0 4px 16px rgba(244, 63, 94, 0.4) !important;
+        0 0 20px rgba(239, 68, 68, 0.5),
+        0 4px 16px rgba(239, 68, 68, 0.4) !important;
     }
 
     [class*="method-delete"]:hover,
     [data-method="delete"]:hover {
       box-shadow: 
-        0 0 30px var(--rose-glow),
-        0 6px 20px rgba(244, 63, 94, 0.5) !important;
+        0 0 30px rgba(239, 68, 68, 0.6),
+        0 6px 20px rgba(239, 68, 68, 0.5) !important;
       transform: translateY(-2px) !important;
     }
 
@@ -916,8 +916,8 @@ export class DocsController {
       left: 0;
       right: 0;
       padding: 20px 24px;
-      background: linear-gradient(135deg, var(--primary-cyber), var(--violet-purple));
-      border-top: 1px solid var(--border-dark);
+      background: linear-gradient(135deg, var(--primary-cyber), var(--purple-electric));
+      border-top: 1px solid var(--border-subtle);
       font-size: 12px;
       font-weight: 700;
       text-align: center;
