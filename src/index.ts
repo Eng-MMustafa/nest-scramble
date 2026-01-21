@@ -2,6 +2,11 @@
 export * from './generators/PostmanCollectionGenerator';
 export * from './NestScrambleModule';
 export * from './scanner/ScannerService';
+export { IncrementalScannerService, ScanOptions } from './scanner/IncrementalScannerService';
+export * from './cache/CacheManager';
+export * from './watcher/FileWatcher';
+export * from './watcher/WatchModeService';
+export * from './tracker/DependencyTracker';
 export * from './utils/DtoAnalyzer';
 export * from './utils/MockGenerator';
 export * from './utils/OpenApiTransformer';

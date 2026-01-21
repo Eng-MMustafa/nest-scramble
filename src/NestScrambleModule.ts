@@ -3,6 +3,7 @@ import { DynamicModule, MiddlewareConsumer, Module, OnModuleInit, RequestMethod 
 import { PostmanCollectionGenerator } from './generators/PostmanCollectionGenerator';
 import { MockMiddleware } from './middleware/MockMiddleware';
 import { ScannerService } from './scanner/ScannerService';
+import { IncrementalScannerService } from './scanner/IncrementalScannerService';
 import { MockGenerator } from './utils/MockGenerator';
 import { OpenApiTransformer } from './utils/OpenApiTransformer';
 import { DocsController } from './controllers/DocsController';
@@ -20,6 +21,17 @@ export interface NestScrambleOptions {
   customDomainIcon?: string;
   primaryColor?: string;
   theme?: 'classic' | 'futuristic';
+  // 🆕 Incremental Scanning Options
+  useIncrementalScanning?: boolean;
+  cacheFilePath?: string;
+  hashAlgorithm?: 'md5' | 'sha256';
+  cacheTtl?: number;
+  // 🆕 Watch Mode Options
+  enableWatchMode?: boolean;
+  watchDebounce?: number;
+  // 🆕 Advanced Options
+  skipDependencyTracking?: boolean;
+  enableHashCollisionDetection?: boolean;
 }
 
 @Module({})
@@ -86,6 +98,17 @@ export class NestScrambleModule implements OnModuleInit {
       customDomainIcon: options.customDomainIcon || '',
       primaryColor: options.primaryColor || '#00f2ff',
       theme: options.theme || 'futuristic',
+      // 🆕 Incremental Scanning Options
+      useIncrementalScanning: options.useIncrementalScanning || false,
+      cacheFilePath: options.cacheFilePath || 'scramble-cache.json',
+      hashAlgorithm: options.hashAlgorithm || 'md5',
+      cacheTtl: options.cacheTtl || 24 * 60 * 60 * 1000, // 24 hours
+      // 🆕 Watch Mode Options
+      enableWatchMode: options.enableWatchMode || false,
+      watchDebounce: options.watchDebounce || 300,
+      // 🆕 Advanced Options
+      skipDependencyTracking: options.skipDependencyTracking || false,
+      enableHashCollisionDetection: options.enableHashCollisionDetection !== false,
     };
 
     // Store for dashboard display
@@ -101,8 +124,32 @@ export class NestScrambleModule implements OnModuleInit {
     console.log(`   Source: ${config.sourcePath}`);
     console.log(`   Config: ${projectStructure.tsConfigPath}`);
 
-    const scanner = new ScannerService();
-    const controllers = scanner.scanControllers(config.sourcePath);
+    // Use IncrementalScannerService if enabled
+    let scanner: ScannerService | IncrementalScannerService;
+    let controllers: any[];
+    
+    if (config.useIncrementalScanning) {
+      console.log(`[Nest-Scramble] 🚀 Using Incremental Scanner with caching...`);
+      scanner = new IncrementalScannerService({
+        useCache: true,
+        cacheFilePath: config.cacheFilePath,
+        hashAlgorithm: config.hashAlgorithm || 'md5',
+        cacheTtl: config.cacheTtl,
+        skipDependencyTracking: config.skipDependencyTracking,
+      });
+      
+      // Initialize and scan
+      (scanner as IncrementalScannerService).initialize(config.sourcePath);
+      controllers = (scanner as IncrementalScannerService).scanControllers(config.sourcePath);
+      
+      // Show cache stats
+      const cacheStats = (scanner as IncrementalScannerService).getCacheManager().getStats();
+      console.log(`[Nest-Scramble] 📊 Cache: ${cacheStats.controllerCount} controllers, ${cacheStats.hashAlgorithm} algorithm`);
+    } else {
+      console.log(`[Nest-Scramble] 📦 Using Traditional Scanner...`);
+      scanner = new ScannerService();
+      controllers = scanner.scanControllers(config.sourcePath);
+    }
     
     console.log(`\n[Nest-Scramble] 📦 Generating OpenAPI specification...`);
     const transformer = new OpenApiTransformer(config.baseUrl);
@@ -126,6 +173,7 @@ export class NestScrambleModule implements OnModuleInit {
       module: NestScrambleModule,
       providers: [
         ScannerService,
+        IncrementalScannerService,
         PostmanCollectionGenerator,
         OpenApiTransformer,
         MockGenerator,
@@ -142,7 +190,7 @@ export class NestScrambleModule implements OnModuleInit {
           useValue: config,
         },
       ],
-      exports: [ScannerService, PostmanCollectionGenerator, OpenApiTransformer],
+      exports: [ScannerService, IncrementalScannerService, PostmanCollectionGenerator, OpenApiTransformer],
       controllers: [DocsController],
       imports: [],
     };
