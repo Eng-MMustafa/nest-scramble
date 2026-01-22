@@ -48,7 +48,7 @@
   "peerDependencies": {
     "@nestjs/common": ">=9.0.0",
     "@nestjs/core": ">=9.0.0",
-    "reflect-metadata": "^0.1.13 || ^0.2.0"
+    "reflect-metadata": ">=0.1.13"
   },
   "peerDependenciesMeta": {
     "reflect-metadata": {
