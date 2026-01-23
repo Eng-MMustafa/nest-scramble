@@ -8,7 +8,7 @@
 [![Author](https://img.shields.io/badge/Author-Mohamed%20Mustafa-blue.svg)](https://github.com/Eng-MMustafa)
 [![NestJS Compatibility](https://img.shields.io/badge/NestJS-%3E%3D9.0.0-blue.svg)](https://docs.nestjs.com)
 
-## 📋 What's New in v2.1.2
+## 📋 What's New in v2.1.3
 
 ### ✅ Recent Fixes & Improvements
 - **🔧 Fixed**: baseUrl configuration now properly displays in dashboard URLs
@@ -909,7 +909,7 @@ NestScrambleModule.forRoot({
 - Clear your browser cache and hard refresh (Ctrl+Shift+R / Cmd+Shift+R)
 - Check browser console for errors
 - Verify the `/docs-json` endpoint returns valid JSON
-- Ensure you're using version 2.1.2 or higher: `npm list nest-scramble`
+- Ensure you're using version 2.1.3 or higher: `npm list nest-scramble`
 
 #### 3. **TypeScript Compilation Errors**
 
@@ -1051,7 +1051,7 @@ getUser(@Param('id') id: string) {
 If you're still experiencing issues:
 
 1. **Check the logs** - Nest-Scramble provides detailed diagnostic output on startup
-2. **Verify your version** - Run `npm list nest-scramble` (should be 2.1.2+)
+2. **Verify your version** - Run `npm list nest-scramble` (should be 2.1.3+)
 3. **Open an issue** - [GitHub Issues](https://github.com/Eng-MMustafa/nest-scramble/issues)
 
 When reporting issues, please include:
