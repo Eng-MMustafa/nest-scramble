@@ -6,6 +6,27 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub stars](https://img.shields.io/github/stars/Eng-MMustafa/nest-scramble.svg)](https://github.com/Eng-MMustafa/nest-scramble)
 [![Author](https://img.shields.io/badge/Author-Mohamed%20Mustafa-blue.svg)](https://github.com/Eng-MMustafa)
+[![NestJS Compatibility](https://img.shields.io/badge/NestJS-%3E%3D9.0.0-blue.svg)](https://docs.nestjs.com)
+
+## 📋 What's New in v2.1.2
+
+### ✅ Recent Fixes & Improvements
+- **🔧 Fixed**: baseUrl configuration now properly displays in dashboard URLs
+- **🔧 Updated**: Enhanced NestJS compatibility (>=9.0.0)
+- **🔧 Improved**: Simplified reflect-metadata dependency
+- **🎯 Feature**: Full baseUrl customization support
+
+**Dashboard URLs now respect your configuration:**
+```typescript
+NestScrambleModule.forRoot({
+  baseUrl: 'http://127.0.0.1:4444'  // ✅ Now works perfectly!
+})
+```
+
+### 📖 Full Changelog
+Check out the [CHANGELOG.md](CHANGELOG.md) for complete version history.
+
+---
 
 ## 🚀 Why Nest-Scramble?
 
@@ -160,6 +181,34 @@ Then open your browser:
 - 🎨 Serves beautiful documentation
 - 🎭 Provides mock endpoints
 
+## 🔧 Compatibility & Requirements
+
+### Supported Versions
+- **NestJS**: `>=9.0.0` (v9.x, v10.x, and future versions)
+- **Node.js**: `>=16.0.0`
+- **TypeScript**: `>=4.5.0`
+- **reflect-metadata**: `>=0.1.13` (optional)
+
+### Package Managers
+```bash
+# npm
+npm install nest-scramble
+
+# yarn
+yarn add nest-scramble
+
+# pnpm
+pnpm add nest-scramble
+```
+
+### Auto-Detection Features
+Nest-Scramble automatically detects:
+- ✅ Project structure and source directories
+- ✅ API title and version from `package.json`
+- ✅ Base URL from `PORT` and `HOST` environment variables
+- ✅ TypeScript configuration and controller locations
+- ✅ Dependencies and module relationships
+
 ## ⚙️ Configuration Options
 
 ```typescript
@@ -167,8 +216,11 @@ NestScrambleModule.forRoot({
   // Source directory to scan for controllers
   sourcePath: 'src',                    // default: 'src'
 
-  // API base URL for OpenAPI spec
-  baseUrl: 'http://localhost:3000',     // default: 'http://localhost:3000'
+  // API base URL for OpenAPI spec and dashboard display
+  baseUrl: 'http://localhost:3000',     // default: auto-detected from PORT/HOST env
+
+  // Documentation path (customizable)
+  path: '/docs',                        // default: '/docs'
 
   // Enable live mocking middleware
   enableMock: true,                     // default: true
@@ -178,6 +230,20 @@ NestScrambleModule.forRoot({
 
   // Postman collection output path
   postmanOutputPath: 'collection.json', // default: 'collection.json'
+
+  // UI Theme options
+  theme: 'futuristic',                  // 'classic' | 'futuristic' (default: 'futuristic')
+  primaryColor: '#00f2ff',             // default: '#00f2ff'
+  customDomainIcon: '',                 // default: ''
+
+  // API metadata (auto-detected from package.json)
+  apiTitle: 'My API',                   // default: auto-detected
+  apiVersion: '1.0.0',                  // default: auto-detected
+
+  // 🆕 Advanced Features
+  useIncrementalScanning: false,        // Enable caching for faster startups
+  enableWatchMode: false,               // Auto-regenerate on file changes
+  cacheTtl: 24 * 60 * 60 * 1000,       // Cache TTL in milliseconds (24 hours)
 })
 ```
 
@@ -186,10 +252,44 @@ NestScrambleModule.forRoot({
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `sourcePath` | `string` | `'src'` | Directory where your NestJS controllers are located |
-| `baseUrl` | `string` | `'http://localhost:3000'` | Base URL for your API (used in OpenAPI spec) |
+| `baseUrl` | `string` | `auto-detected` | Base URL for your API (used in OpenAPI spec and dashboard URLs) |
+| `path` | `string` | `'/docs'` | Documentation endpoint path |
 | `enableMock` | `boolean` | `true` | Enable `/scramble-mock/*` endpoints for testing |
 | `autoExportPostman` | `boolean` | `false` | Automatically generate Postman collection file |
 | `postmanOutputPath` | `string` | `'collection.json'` | Output path for Postman collection |
+| `theme` | `string` | `'futuristic'` | UI theme: 'classic' or 'futuristic' |
+| `primaryColor` | `string` | `'#00f2ff'` | Primary accent color for UI |
+| `apiTitle` | `string` | `auto-detected` | API title (auto-detected from package.json) |
+| `apiVersion` | `string` | `auto-detected` | API version (auto-detected from package.json) |
+| `useIncrementalScanning` | `boolean` | `false` | Enable caching for faster startup times |
+| `enableWatchMode` | `boolean` | `false` | Auto-regenerate docs on file changes |
+| `cacheTtl` | `number` | `24h` | Cache time-to-live in milliseconds |
+
+### 🎯 baseUrl Configuration
+
+The `baseUrl` option is now properly respected in the dashboard display:
+
+```typescript
+// Example with custom baseUrl
+NestScrambleModule.forRoot({
+  baseUrl: 'http://127.0.0.1:4444',
+  path: '/api-docs'
+})
+```
+
+**Dashboard Output:**
+```
+┌──────────────────────────────────────────────────────────┐
+│  ✨ NEST-SCRAMBLE by Mohamed Mustafa                      │
+├──────────────────────────────────────────────────────────┤
+│  ● Documentation                                           │
+│    → http://127.0.0.1:4444/api-docs                      │
+│  ● OpenAPI Spec                                            │
+│    → http://127.0.0.1:4444/api-docs-json                 │
+│  ● Mock Server                                             │
+│    → http://127.0.0.1:4444/scramble-mock                 │
+└──────────────────────────────────────────────────────────┘
+```
 
 ## 🎭 Live Mocking Guide
 
@@ -809,7 +909,7 @@ NestScrambleModule.forRoot({
 - Clear your browser cache and hard refresh (Ctrl+Shift+R / Cmd+Shift+R)
 - Check browser console for errors
 - Verify the `/docs-json` endpoint returns valid JSON
-- Ensure you're using version 1.1.0 or higher: `npm list nest-scramble`
+- Ensure you're using version 2.1.2 or higher: `npm list nest-scramble`
 
 #### 3. **TypeScript Compilation Errors**
 
@@ -951,7 +1051,7 @@ getUser(@Param('id') id: string) {
 If you're still experiencing issues:
 
 1. **Check the logs** - Nest-Scramble provides detailed diagnostic output on startup
-2. **Verify your version** - Run `npm list nest-scramble` (should be 1.1.0+)
+2. **Verify your version** - Run `npm list nest-scramble` (should be 2.1.2+)
 3. **Open an issue** - [GitHub Issues](https://github.com/Eng-MMustafa/nest-scramble/issues)
 
 When reporting issues, please include:

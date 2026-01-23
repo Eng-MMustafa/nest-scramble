@@ -1,6 +1,6 @@
 {
   "name": "nest-scramble",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "A next-generation, decorator-free API documentation engine and intelligent mock server for NestJS, engineered by Mohamed Mustafa",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -46,9 +46,9 @@
     "@typescript-eslint/parser": "^6.15.0"
   },
   "peerDependencies": {
-    "@nestjs/common": "^10.0.0",
-    "@nestjs/core": "^10.0.0",
-    "reflect-metadata": "^0.1.13 || ^0.2.0"
+    "@nestjs/common": ">=9.0.0",
+    "@nestjs/core": ">=9.0.0",
+    "reflect-metadata": ">=0.1.13"
   },
   "peerDependenciesMeta": {
     "reflect-metadata": {

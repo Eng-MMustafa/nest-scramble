@@ -4,6 +4,9 @@ src/
 # Tests
 tests/
 __tests__/
+*.test.ts
+*.spec.ts
+test-*
 
 # Config files
 tsconfig.json
@@ -25,3 +28,4 @@ scripts/
 !README.md
 !package.json
 !LICENSE
+!CHANGELOG.md

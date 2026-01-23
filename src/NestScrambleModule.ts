@@ -37,16 +37,15 @@ export interface NestScrambleOptions {
 @Module({})
 export class NestScrambleModule implements OnModuleInit {
   private static moduleOptions: NestScrambleOptions = {};
-  private static detectedPort: number = 3000;
 
   onModuleInit() {
     this.displayDashboard();
   }
 
   private displayDashboard() {
-    const port = NestScrambleModule.detectedPort;
     const options = NestScrambleModule.moduleOptions;
     const projectStructure = AutoDetector.detectProjectStructure();
+    const baseUrl = options.baseUrl;
 
     const cyan = '\x1b[36m';
     const purple = '\x1b[35m';
@@ -63,14 +62,14 @@ export class NestScrambleModule implements OnModuleInit {
     console.log(`${gradient}║${reset}  ${purple}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${reset}  ${gradient}║${reset}`);
     console.log(`${gradient}║${reset}                                                               ${gradient}║${reset}`);
     console.log(`${gradient}║${reset}  ${green}●${reset} ${bold}Documentation${reset}                                           ${gradient}║${reset}`);
-    console.log(`${gradient}║${reset}    ${cyan}→${reset} http://localhost:${port}/docs                            ${gradient}║${reset}`);
+    console.log(`${gradient}║${reset}    ${cyan}→${reset} ${baseUrl}${options.path || '/docs'}                            ${gradient}║${reset}`);
     console.log(`${gradient}║${reset}                                                               ${gradient}║${reset}`);
     console.log(`${gradient}║${reset}  ${green}●${reset} ${bold}OpenAPI Spec${reset}                                            ${gradient}║${reset}`);
-    console.log(`${gradient}║${reset}    ${cyan}→${reset} http://localhost:${port}/docs-json                       ${gradient}║${reset}`);
+    console.log(`${gradient}║${reset}    ${cyan}→${reset} ${baseUrl}${options.path || '/docs'}-json                       ${gradient}║${reset}`);
     if (options.enableMock !== false) {
       console.log(`${gradient}║${reset}                                                               ${gradient}║${reset}`);
       console.log(`${gradient}║${reset}  ${green}●${reset} ${bold}Mock Server${reset}                                             ${gradient}║${reset}`);
-      console.log(`${gradient}║${reset}    ${cyan}→${reset} http://localhost:${port}/scramble-mock                  ${gradient}║${reset}`);
+      console.log(`${gradient}║${reset}    ${cyan}→${reset} ${baseUrl}/scramble-mock                  ${gradient}║${reset}`);
     }
     console.log(`${gradient}║${reset}                                                               ${gradient}║${reset}`);
     console.log(`${gradient}║${reset}  ${purple}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${reset}  ${gradient}║${reset}`);
@@ -113,7 +112,6 @@ export class NestScrambleModule implements OnModuleInit {
 
     // Store for dashboard display
     NestScrambleModule.moduleOptions = config;
-    NestScrambleModule.detectedPort = AutoDetector.detectPort();
 
     console.log(`\n${'='.repeat(60)}`);
     console.log(`🚀 [Nest-Scramble] Zero-Config Auto-Detection Engine`);
