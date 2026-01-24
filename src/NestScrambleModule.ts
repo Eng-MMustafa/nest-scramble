@@ -1,5 +1,6 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
-import { DynamicModule, MiddlewareConsumer, Module, OnModuleInit, RequestMethod } from '@nestjs/common';
+import { DynamicModule, MiddlewareConsumer, Module, OnModuleInit, RequestMethod, Inject } from '@nestjs/common';
+import { ConfigurableModuleClass, MODULE_OPTIONS_TOKEN } from './nest-scramble.module-definition';
 import { PostmanCollectionGenerator } from './generators/PostmanCollectionGenerator';
 import { MockMiddleware } from './middleware/MockMiddleware';
 import { ScannerService } from './scanner/ScannerService';
@@ -21,32 +22,38 @@ export interface NestScrambleOptions {
   customDomainIcon?: string;
   primaryColor?: string;
   theme?: 'classic' | 'futuristic';
-  // 🆕 Incremental Scanning Options
   useIncrementalScanning?: boolean;
   cacheFilePath?: string;
   hashAlgorithm?: 'md5' | 'sha256';
   cacheTtl?: number;
-  // 🆕 Watch Mode Options
   enableWatchMode?: boolean;
   watchDebounce?: number;
-  // 🆕 Advanced Options
   skipDependencyTracking?: boolean;
   enableHashCollisionDetection?: boolean;
+  defaultAuthType?: 'bearer' | 'apiKey' | 'none';
+  enableApiVersioning?: boolean;
 }
 
 @Module({})
-export class NestScrambleModule implements OnModuleInit {
+export class NestScrambleModule extends ConfigurableModuleClass implements OnModuleInit {
   private static moduleOptions: NestScrambleOptions = {};
-  private static detectedPort: number = 3000;
+
+  constructor(
+    @Inject(MODULE_OPTIONS_TOKEN)
+    private readonly options: NestScrambleOptions,
+  ) {
+    super();
+    NestScrambleModule.moduleOptions = options;
+  }
 
   onModuleInit() {
     this.displayDashboard();
   }
 
   private displayDashboard() {
-    const port = NestScrambleModule.detectedPort;
     const options = NestScrambleModule.moduleOptions;
     const projectStructure = AutoDetector.detectProjectStructure();
+    const baseUrl = options.baseUrl;
 
     const cyan = '\x1b[36m';
     const purple = '\x1b[35m';
@@ -63,14 +70,14 @@ export class NestScrambleModule implements OnModuleInit {
     console.log(`${gradient}║${reset}  ${purple}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${reset}  ${gradient}║${reset}`);
     console.log(`${gradient}║${reset}                                                               ${gradient}║${reset}`);
     console.log(`${gradient}║${reset}  ${green}●${reset} ${bold}Documentation${reset}                                           ${gradient}║${reset}`);
-    console.log(`${gradient}║${reset}    ${cyan}→${reset} http://localhost:${port}/docs                            ${gradient}║${reset}`);
+    console.log(`${gradient}║${reset}    ${cyan}→${reset} ${baseUrl}${options.path || '/docs'}                            ${gradient}║${reset}`);
     console.log(`${gradient}║${reset}                                                               ${gradient}║${reset}`);
     console.log(`${gradient}║${reset}  ${green}●${reset} ${bold}OpenAPI Spec${reset}                                            ${gradient}║${reset}`);
-    console.log(`${gradient}║${reset}    ${cyan}→${reset} http://localhost:${port}/docs-json                       ${gradient}║${reset}`);
+    console.log(`${gradient}║${reset}    ${cyan}→${reset} ${baseUrl}${options.path || '/docs'}-json                       ${gradient}║${reset}`);
     if (options.enableMock !== false) {
       console.log(`${gradient}║${reset}                                                               ${gradient}║${reset}`);
       console.log(`${gradient}║${reset}  ${green}●${reset} ${bold}Mock Server${reset}                                             ${gradient}║${reset}`);
-      console.log(`${gradient}║${reset}    ${cyan}→${reset} http://localhost:${port}/scramble-mock                  ${gradient}║${reset}`);
+      console.log(`${gradient}║${reset}    ${cyan}→${reset} ${baseUrl}/scramble-mock                  ${gradient}║${reset}`);
     }
     console.log(`${gradient}║${reset}                                                               ${gradient}║${reset}`);
     console.log(`${gradient}║${reset}  ${purple}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${reset}  ${gradient}║${reset}`);
@@ -85,7 +92,6 @@ export class NestScrambleModule implements OnModuleInit {
     // Auto-detect project structure
     const projectStructure = AutoDetector.detectProjectStructure();
     
-    // Smart defaults with auto-detection
     const config = {
       path: options.path || '/docs',
       enableMock: options.enableMock !== undefined ? options.enableMock : true,
@@ -98,33 +104,28 @@ export class NestScrambleModule implements OnModuleInit {
       customDomainIcon: options.customDomainIcon || '',
       primaryColor: options.primaryColor || '#00f2ff',
       theme: options.theme || 'futuristic',
-      // 🆕 Incremental Scanning Options
       useIncrementalScanning: options.useIncrementalScanning || false,
       cacheFilePath: options.cacheFilePath || 'scramble-cache.json',
       hashAlgorithm: options.hashAlgorithm || 'md5',
-      cacheTtl: options.cacheTtl || 24 * 60 * 60 * 1000, // 24 hours
-      // 🆕 Watch Mode Options
+      cacheTtl: options.cacheTtl || 24 * 60 * 60 * 1000,
       enableWatchMode: options.enableWatchMode || false,
       watchDebounce: options.watchDebounce || 300,
-      // 🆕 Advanced Options
       skipDependencyTracking: options.skipDependencyTracking || false,
       enableHashCollisionDetection: options.enableHashCollisionDetection !== false,
     };
 
-    // Store for dashboard display
     NestScrambleModule.moduleOptions = config;
-    NestScrambleModule.detectedPort = AutoDetector.detectPort();
 
     console.log(`\n${'='.repeat(60)}`);
     console.log(`🚀 [Nest-Scramble] Zero-Config Auto-Detection Engine`);
     console.log(`   Developed by Mohamed Mustafa | MIT License`);
+    console.log(`   NestJS 10 & 11 | Node.js 18.10+ | TypeScript 5+`);
     console.log(`${'='.repeat(60)}`);
     console.log(`\n[Nest-Scramble] 🔍 Auto-detected project structure:`);
     console.log(`   Root: ${projectStructure.rootPath}`);
     console.log(`   Source: ${config.sourcePath}`);
     console.log(`   Config: ${projectStructure.tsConfigPath}`);
 
-    // Use IncrementalScannerService if enabled
     let scanner: ScannerService | IncrementalScannerService;
     let controllers: any[];
     
@@ -138,11 +139,9 @@ export class NestScrambleModule implements OnModuleInit {
         skipDependencyTracking: config.skipDependencyTracking,
       });
       
-      // Initialize and scan
       (scanner as IncrementalScannerService).initialize(config.sourcePath);
       controllers = (scanner as IncrementalScannerService).scanControllers(config.sourcePath);
       
-      // Show cache stats
       const cacheStats = (scanner as IncrementalScannerService).getCacheManager().getStats();
       console.log(`[Nest-Scramble] 📊 Cache: ${cacheStats.controllerCount} controllers, ${cacheStats.hashAlgorithm} algorithm`);
     } else {
@@ -169,9 +168,14 @@ export class NestScrambleModule implements OnModuleInit {
       console.log(`[Nest-Scramble] ✓ Postman collection exported to ${config.postmanOutputPath}`);
     }
 
+    // Get the base module from ConfigurableModuleBuilder
+    const baseModule = super.forRoot(config);
+
+    // Merge with our custom providers and controllers
     return {
-      module: NestScrambleModule,
+      ...baseModule,
       providers: [
+        ...(baseModule.providers || []),
         ScannerService,
         IncrementalScannerService,
         PostmanCollectionGenerator,
@@ -190,19 +194,24 @@ export class NestScrambleModule implements OnModuleInit {
           useValue: config,
         },
       ],
-      exports: [ScannerService, IncrementalScannerService, PostmanCollectionGenerator, OpenApiTransformer],
+      exports: [
+        ...(baseModule.exports || []),
+        ScannerService,
+        IncrementalScannerService,
+        PostmanCollectionGenerator,
+        OpenApiTransformer,
+      ],
       controllers: [DocsController],
-      imports: [],
     };
   }
 
-  static forRootAsync(options: NestScrambleOptions = {}): DynamicModule {
-    // Similar to forRoot but with async providers if needed
-    return this.forRoot(options);
-  }
+  /**
+   * Modern async configuration support using ConfigurableModuleBuilder
+   * Supports useFactory, useClass, and useExisting patterns
+   */
+  static forRootAsync = super.forRootAsync;
 
   configure(consumer: MiddlewareConsumer) {
-    // Apply mock middleware if enabled
     consumer
       .apply(MockMiddleware)
       .forRoutes({ path: 'scramble-mock/*', method: RequestMethod.ALL });

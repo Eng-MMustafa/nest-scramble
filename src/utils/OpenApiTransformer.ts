@@ -37,13 +37,15 @@ export class OpenApiTransformer {
    */
   transform(controllers: ControllerInfo[], title = 'NestJS API', version = '1.0.0', baseUrl = 'http://localhost:3000'): OpenApiSpec {
     this.schemas = {};
-
     const paths: Record<string, Record<string, any>> = {};
 
     for (const controller of controllers) {
       for (const method of controller.methods) {
-        const fullPath = this.buildPath(controller.path, method.route);
-        const operation = this.createOperation(method, controller.hasGuards);
+        const methodVersion = method.version || controller.version;
+        const fullPath = this.buildPath(controller.path, method.route, methodVersion);
+        const requiresAuth = this.requiresAuthentication(method, controller);
+        const guardTypes = this.getEffectiveGuardTypes(method, controller);
+        const operation = this.createOperation(method, requiresAuth, guardTypes);
 
         if (!paths[fullPath]) {
           paths[fullPath] = {};
@@ -75,18 +77,68 @@ export class OpenApiTransformer {
             bearerFormat: 'JWT',
             description: 'Enter your Bearer token in the format: Bearer <token>',
           },
+          apiKey: {
+            type: 'apiKey',
+            in: 'header',
+            name: 'X-API-Key',
+            description: 'API Key for authentication',
+          },
         },
       },
     };
   }
 
-  private buildPath(controllerPath: string, methodRoute: string): string {
-    const parts = [controllerPath, methodRoute].filter(p => p);
+  private buildPath(controllerPath: string, methodRoute: string, version?: string | string[]): string {
+    const parts: string[] = [];
+    
+    if (version) {
+      const versionStr = Array.isArray(version) ? version[0] : version;
+      parts.push(`v${versionStr}`);
+    }
+    
+    if (controllerPath) parts.push(controllerPath);
+    if (methodRoute) parts.push(methodRoute);
+    
     return '/' + parts.join('/').replace(/\/+/g, '/');
   }
 
-  private createOperation(method: MethodInfo, controllerHasGuards?: boolean): any {
-    // Determine success status code based on HTTP method
+  private requiresAuthentication(method: MethodInfo, controller: ControllerInfo): boolean {
+    if (method.isPublic) return false;
+    if (controller.isPublic && !method.hasGuards) return false;
+    if (method.hasGuards) return true;
+    if (controller.hasGuards && !method.isPublic) return true;
+    return false;
+  }
+
+  private getEffectiveGuardTypes(method: MethodInfo, controller: ControllerInfo): string[] {
+    if (method.guardTypes && method.guardTypes.length > 0) {
+      return method.guardTypes;
+    }
+    
+    if (controller.guardTypes && controller.guardTypes.length > 0) {
+      return controller.guardTypes;
+    }
+    
+    return [];
+  }
+
+  private determineSecurityScheme(guardTypes: string[]): string {
+    for (const guardType of guardTypes) {
+      const lowerGuard = guardType.toLowerCase();
+      
+      if (lowerGuard.includes('jwt') || lowerGuard.includes('bearer')) {
+        return 'bearerAuth';
+      }
+      
+      if (lowerGuard.includes('apikey') || lowerGuard.includes('api-key')) {
+        return 'apiKey';
+      }
+    }
+    
+    return 'bearerAuth';
+  }
+
+  private createOperation(method: MethodInfo, requiresAuth: boolean, guardTypes: string[]): any {
     const successStatusCode = this.getSuccessStatusCode(method.httpMethod);
     const successDescription = this.getSuccessDescription(method.httpMethod);
 
@@ -133,7 +185,6 @@ export class OpenApiTransformer {
       },
     };
 
-    // Add parameters
     const parameters: any[] = [];
     for (const param of method.parameters) {
       if (param.parameterLocation === 'body') {
@@ -146,7 +197,6 @@ export class OpenApiTransformer {
           },
         };
       } else if (param.parameterLocation === 'query') {
-        // For query params, if it's an object, add properties as query params
         if (param.type.properties) {
           for (const prop of param.type.properties) {
             parameters.push({
@@ -158,7 +208,6 @@ export class OpenApiTransformer {
             });
           }
         } else {
-          // Single query parameter
           parameters.push({
             name: param.name,
             in: 'query',
@@ -187,16 +236,30 @@ export class OpenApiTransformer {
       operation.parameters = parameters;
     }
 
-    // Add security requirements if method or controller has guards
-    if (method.hasGuards || controllerHasGuards) {
+    if (requiresAuth) {
+      const securityScheme = this.determineSecurityScheme(guardTypes);
       operation.security = [
         {
-          bearerAuth: [],
+          [securityScheme]: [],
         },
       ];
+      
+      operation.responses['401'] = {
+        description: 'Unauthorized',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                statusCode: { type: 'number', example: 401 },
+                message: { type: 'string', example: 'Unauthorized' },
+              },
+            },
+          },
+        },
+      };
     }
 
-    // Add code samples
     operation['x-code-samples'] = this.generateCodeSamples(method);
 
     return operation;

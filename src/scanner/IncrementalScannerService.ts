@@ -12,6 +12,9 @@ export interface ControllerInfo {
   path: string;
   methods: MethodInfo[];
   hasGuards?: boolean;
+  version?: string | string[];
+  guardTypes?: string[];
+  isPublic?: boolean;
   filePath?: string;
 }
 
@@ -22,6 +25,9 @@ export interface MethodInfo {
   parameters: ParameterInfo[];
   returnType: AnalyzedType;
   hasGuards?: boolean;
+  version?: string | string[];
+  guardTypes?: string[];
+  isPublic?: boolean;
 }
 
 export interface ParameterInfo {
@@ -391,13 +397,10 @@ export class IncrementalScannerService {
     if (!controllerDecorator) return null;
 
     const controllerPath = this.extractDecoratorArgument(controllerDecorator) || '';
-
-    const hasGuards = cls.getDecorators().some(decorator => {
-      const callExpression = decorator.getCallExpression();
-      if (!callExpression) return false;
-      const expression = callExpression.getExpression();
-      return Node.isIdentifier(expression) && expression.getText() === 'UseGuards';
-    });
+    const version = this.extractVersionDecorator(cls);
+    const guardTypes = this.extractGuardTypes(cls);
+    const hasGuards = guardTypes.length > 0;
+    const isPublic = this.isPublicDecorator(cls);
 
     const methods: MethodInfo[] = [];
 
@@ -413,6 +416,9 @@ export class IncrementalScannerService {
       path: controllerPath,
       methods,
       hasGuards,
+      version,
+      guardTypes,
+      isPublic,
     };
   }
 
@@ -445,12 +451,10 @@ export class IncrementalScannerService {
     const httpMethod = expression.getText().toUpperCase();
     const route = this.extractDecoratorArgument(httpDecorator) || '';
 
-    const hasGuards = method.getDecorators().some(decorator => {
-      const callExpression = decorator.getCallExpression();
-      if (!callExpression) return false;
-      const expression = callExpression.getExpression();
-      return Node.isIdentifier(expression) && expression.getText() === 'UseGuards';
-    });
+    const version = this.extractVersionDecorator(method);
+    const guardTypes = this.extractGuardTypes(method);
+    const hasGuards = guardTypes.length > 0;
+    const isPublic = this.isPublicDecorator(method);
 
     const parameters: ParameterInfo[] = method.getParameters().map(param => {
       const decoratorText = param.getDecorators().map(d => d.getText()).join(' ');
@@ -483,6 +487,108 @@ export class IncrementalScannerService {
       parameters,
       returnType,
       hasGuards,
+      version,
+      guardTypes,
+      isPublic,
     };
+  }
+
+  private extractVersionDecorator(node: ClassDeclaration | MethodDeclaration): string | string[] | undefined {
+    const versionDecorator = node.getDecorators().find(decorator => {
+      const callExpression = decorator.getCallExpression();
+      if (!callExpression) return false;
+      const expression = callExpression.getExpression();
+      return Node.isIdentifier(expression) && expression.getText() === 'Version';
+    });
+
+    if (!versionDecorator) return undefined;
+
+    const callExpression = versionDecorator.getCallExpression();
+    if (!callExpression) return undefined;
+
+    const args = callExpression.getArguments();
+    if (args.length === 0) return undefined;
+
+    const firstArg = args[0];
+
+    if (Node.isStringLiteral(firstArg)) {
+      return firstArg.getLiteralValue();
+    }
+
+    if (Node.isArrayLiteralExpression(firstArg)) {
+      const versions: string[] = [];
+      for (const element of firstArg.getElements()) {
+        if (Node.isStringLiteral(element)) {
+          versions.push(element.getLiteralValue());
+        }
+      }
+      return versions.length > 0 ? versions : undefined;
+    }
+
+    return undefined;
+  }
+
+  private extractGuardTypes(node: ClassDeclaration | MethodDeclaration): string[] {
+    const guardTypes: string[] = [];
+
+    const useGuardsDecorators = node.getDecorators().filter(decorator => {
+      const callExpression = decorator.getCallExpression();
+      if (!callExpression) return false;
+      const expression = callExpression.getExpression();
+      return Node.isIdentifier(expression) && expression.getText() === 'UseGuards';
+    });
+
+    for (const decorator of useGuardsDecorators) {
+      const callExpression = decorator.getCallExpression();
+      if (!callExpression) continue;
+
+      const args = callExpression.getArguments();
+      for (const arg of args) {
+        if (Node.isIdentifier(arg)) {
+          guardTypes.push(arg.getText());
+        }
+        else if (Node.isCallExpression(arg)) {
+          const expr = arg.getExpression();
+          if (Node.isIdentifier(expr) && expr.getText() === 'AuthGuard') {
+            const guardArgs = arg.getArguments();
+            if (guardArgs.length > 0 && Node.isStringLiteral(guardArgs[0])) {
+              const strategy = guardArgs[0].getLiteralValue();
+              guardTypes.push(`AuthGuard(${strategy})`);
+            } else {
+              guardTypes.push('AuthGuard');
+            }
+          }
+        }
+      }
+    }
+
+    return guardTypes;
+  }
+
+  private isPublicDecorator(node: ClassDeclaration | MethodDeclaration): boolean {
+    return node.getDecorators().some(decorator => {
+      const callExpression = decorator.getCallExpression();
+      if (!callExpression) return false;
+      const expression = callExpression.getExpression();
+      
+      if (Node.isIdentifier(expression) && expression.getText() === 'Public') {
+        return true;
+      }
+
+      if (Node.isIdentifier(expression) && expression.getText() === 'SetMetadata') {
+        const args = callExpression.getArguments();
+        if (args.length >= 2) {
+          const firstArg = args[0];
+          const secondArg = args[1];
+          if (Node.isStringLiteral(firstArg) && firstArg.getLiteralValue() === 'isPublic') {
+            if (secondArg.getText() === 'true') {
+              return true;
+            }
+          }
+        }
+      }
+
+      return false;
+    });
   }
 }
