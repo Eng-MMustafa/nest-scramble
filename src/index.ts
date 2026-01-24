@@ -1,6 +1,7 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
 export * from './generators/PostmanCollectionGenerator';
 export * from './NestScrambleModule';
+export * from './nest-scramble.module-definition';
 export * from './scanner/ScannerService';
 export { IncrementalScannerService, ScanOptions } from './scanner/IncrementalScannerService';
 export * from './cache/CacheManager';

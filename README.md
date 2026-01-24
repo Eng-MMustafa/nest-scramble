@@ -6,15 +6,19 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub stars](https://img.shields.io/github/stars/Eng-MMustafa/nest-scramble.svg)](https://github.com/Eng-MMustafa/nest-scramble)
 [![Author](https://img.shields.io/badge/Author-Mohamed%20Mustafa-blue.svg)](https://github.com/Eng-MMustafa)
-[![NestJS Compatibility](https://img.shields.io/badge/NestJS-%3E%3D9.0.0-blue.svg)](https://docs.nestjs.com)
+[![NestJS Compatibility](https://img.shields.io/badge/NestJS-10%20%7C%2011-blue.svg)](https://docs.nestjs.com)
+[![Node Version](https://img.shields.io/badge/node-%3E%3D18.10.0-brightgreen.svg)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/typescript-%3E%3D5.0.0-blue.svg)](https://www.typescriptlang.org)
 
-## 📋 What's New in v2.1.3
+## 📋 What's New in v3.0.0
 
-### ✅ Recent Fixes & Improvements
-- **🔧 Fixed**: baseUrl configuration now properly displays in dashboard URLs
-- **🔧 Updated**: Enhanced NestJS compatibility (>=9.0.0)
-- **🔧 Improved**: Simplified reflect-metadata dependency
-- **🎯 Feature**: Full baseUrl customization support
+### 🚀 Major Version Update - NestJS 10 & 11 Focus
+- **⚡ Breaking**: Dropped NestJS 9 support - now requires NestJS 10.x or 11.x
+- **⚡ Breaking**: Minimum Node.js version is now 18.10.0
+- **⚡ Breaking**: Minimum TypeScript version is now 5.0.0
+- **🔧 Enhanced**: Optimized for modern NestJS metadata patterns
+- **🔧 Improved**: Better TypeScript 5.x type inference and AST analysis
+- **🎯 Feature**: Full compatibility with NestJS 11's latest features
 
 **Dashboard URLs now respect your configuration:**
 ```typescript
@@ -184,10 +188,17 @@ Then open your browser:
 ## 🔧 Compatibility & Requirements
 
 ### Supported Versions
-- **NestJS**: `>=9.0.0` (v9.x, v10.x, and future versions)
-- **Node.js**: `>=16.0.0`
-- **TypeScript**: `>=4.5.0`
+- **NestJS**: `^10.0.0 || ^11.0.0` (v10.x and v11.x only)
+- **Node.js**: `>=18.10.0` (required for NestJS 11)
+- **TypeScript**: `>=5.0.0` (modern features and better type inference)
 - **reflect-metadata**: `>=0.1.13` (optional)
+
+### Migration from v2.x
+If you're upgrading from nest-scramble v2.x with NestJS 9:
+1. Upgrade NestJS to v10 or v11: `npm install @nestjs/common@^10.0.0 @nestjs/core@^10.0.0`
+2. Upgrade Node.js to v18.10.0 or higher
+3. Upgrade TypeScript to v5.0.0 or higher
+4. Then upgrade nest-scramble: `npm install nest-scramble@^3.0.0`
 
 ### Package Managers
 ```bash
@@ -909,7 +920,10 @@ NestScrambleModule.forRoot({
 - Clear your browser cache and hard refresh (Ctrl+Shift+R / Cmd+Shift+R)
 - Check browser console for errors
 - Verify the `/docs-json` endpoint returns valid JSON
-- Ensure you're using version 2.1.3 or higher: `npm list nest-scramble`
+- Ensure you're using version 3.0.0 or higher: `npm list nest-scramble`
+- Verify NestJS version compatibility (v10.x or v11.x required)
+- Check Node.js version: `node --version` (must be >=18.10.0)
+- Check TypeScript version: `npx tsc --version` (must be >=5.0.0)
 
 #### 3. **TypeScript Compilation Errors**
 
@@ -1051,12 +1065,17 @@ getUser(@Param('id') id: string) {
 If you're still experiencing issues:
 
 1. **Check the logs** - Nest-Scramble provides detailed diagnostic output on startup
-2. **Verify your version** - Run `npm list nest-scramble` (should be 2.1.3+)
-3. **Open an issue** - [GitHub Issues](https://github.com/Eng-MMustafa/nest-scramble/issues)
+2. **Verify your version** - Run `npm list nest-scramble` (should be 3.0.0+)
+3. **Check NestJS compatibility** - Verify you're using NestJS v10.x or v11.x (v9 is no longer supported)
+4. **Check Node.js version** - Run `node --version` (must be >=18.10.0)
+5. **Check TypeScript version** - Run `npx tsc --version` (must be >=5.0.0)
+6. **Open an issue** - [GitHub Issues](https://github.com/Eng-MMustafa/nest-scramble/issues)
 
 When reporting issues, please include:
-- Nest-Scramble version
-- NestJS version
+- Nest-Scramble version (3.0.0+)
+- NestJS version (v10.x or v11.x)
+- Node.js version (>=18.10.0)
+- TypeScript version (>=5.0.0)
 - Package manager (npm/yarn/pnpm)
 - Startup logs
 - Sample controller code
