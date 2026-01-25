@@ -1,6 +1,6 @@
 {
   "name": "nest-scramble",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "A next-generation, decorator-free API documentation engine with API versioning and authentication support for NestJS 10 and 11, engineered by Mohamed Mustafa",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -205,12 +205,6 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
     };
   }
 
-  /**
-   * Modern async configuration support using ConfigurableModuleBuilder
-   * Supports useFactory, useClass, and useExisting patterns
-   */
-  static forRootAsync = super.forRootAsync;
-
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(MockMiddleware)
