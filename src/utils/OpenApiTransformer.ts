@@ -12,6 +12,10 @@ interface OpenApiSpec {
   servers: Array<{
     url: string;
   }>;
+  tags?: Array<{
+    name: string;
+    description?: string;
+  }>;
   paths: Record<string, Record<string, any>>;
   components: {
     schemas: Record<string, any>;
@@ -38,6 +42,10 @@ export class OpenApiTransformer {
   transform(controllers: ControllerInfo[], title = 'NestJS API', version = '1.0.0', baseUrl = 'http://localhost:3000'): OpenApiSpec {
     this.schemas = {};
     const paths: Record<string, Record<string, any>> = {};
+    const tags = controllers.map(controller => ({
+      name: this.getControllerTagName(controller),
+      description: controller.path ? `Routes under /${controller.path}` : 'Routes without a controller base path',
+    }));
 
     for (const controller of controllers) {
       for (const method of controller.methods) {
@@ -45,7 +53,7 @@ export class OpenApiTransformer {
         const fullPath = this.buildPath(controller.path, method.route, methodVersion);
         const requiresAuth = this.requiresAuthentication(method, controller);
         const guardTypes = this.getEffectiveGuardTypes(method, controller);
-        const operation = this.createOperation(method, requiresAuth, guardTypes);
+        const operation = this.createOperation(method, controller, requiresAuth, guardTypes);
 
         if (!paths[fullPath]) {
           paths[fullPath] = {};
@@ -67,6 +75,7 @@ export class OpenApiTransformer {
           url: baseUrl,
         },
       ],
+      tags,
       paths,
       components: {
         schemas: this.schemas,
@@ -138,12 +147,13 @@ export class OpenApiTransformer {
     return 'bearerAuth';
   }
 
-  private createOperation(method: MethodInfo, requiresAuth: boolean, guardTypes: string[]): any {
+  private createOperation(method: MethodInfo, controller: ControllerInfo, requiresAuth: boolean, guardTypes: string[]): any {
     const successStatusCode = this.getSuccessStatusCode(method.httpMethod);
     const successDescription = this.getSuccessDescription(method.httpMethod);
 
     const operation: any = {
       summary: method.name,
+      tags: [this.getControllerTagName(controller)],
       responses: {
         [successStatusCode]: {
           description: successDescription,
@@ -263,6 +273,11 @@ export class OpenApiTransformer {
     operation['x-code-samples'] = this.generateCodeSamples(method);
 
     return operation;
+  }
+
+  private getControllerTagName(controller: ControllerInfo): string {
+    const name = controller.name || 'General';
+    return name.replace(/Controller$/, '') || name;
   }
 
   private getSuccessStatusCode(httpMethod: string): string {

@@ -78,8 +78,21 @@ export class DocsController {
   </style>
 </head>
 <body>
-  <script id="api-reference" data-url="/docs-json"></script>
+  <div id="api-reference"></div>
   <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+  <script>
+    Scalar.createApiReference('#api-reference', {
+      url: '/docs-json',
+      defaultOpenFirstTag: false,
+      defaultOpenAllTags: false,
+      hideModels: true,
+      operationTitleSource: 'path',
+      tagsSorter: 'alpha',
+      operationsSorter: 'method',
+      theme: 'default',
+      withDefaultFonts: false,
+    });
+  </script>
 </body>
 </html>`;
     
