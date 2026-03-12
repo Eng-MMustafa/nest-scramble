@@ -107,8 +107,11 @@ export class OpenApiTransformer {
     
     if (controllerPath) parts.push(controllerPath);
     if (methodRoute) parts.push(methodRoute);
-    
-    return '/' + parts.join('/').replace(/\/+/g, '/');
+
+    const normalizedPath = '/' + parts.join('/').replace(/\/+/g, '/');
+
+    // OpenAPI path params use {id} syntax, while Nest routes commonly use :id.
+    return normalizedPath.replace(/:([A-Za-z0-9_]+)/g, '{$1}');
   }
 
   private requiresAuthentication(method: MethodInfo, controller: ControllerInfo): boolean {
