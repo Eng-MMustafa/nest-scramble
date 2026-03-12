@@ -6,6 +6,13 @@
 
 The Nest-Scramble documentation UI has been elevated to a **bespoke, futuristic dashboard** that rivals high-end SaaS products. This document outlines all the advanced UI features and customization options.
 
+## 🆕 Latest Documentation Updates
+
+- **Controller-grouped sidebar**: Operations are grouped under their controller name automatically
+- **Collapsible endpoint tree**: Each controller section can be expanded or collapsed in the sidebar
+- **OpenAPI-safe route params**: Routes like `/users/:id` are emitted as `/users/{id}` for compatibility with OpenAPI renderers
+- **Drop-in upgrade path**: Existing projects only need to update the package and restart the app
+
 ---
 
 ## 🎨 Futuristic Theme Features
@@ -28,6 +35,12 @@ The Nest-Scramble documentation UI has been elevated to a **bespoke, futuristic 
 - **Fonts**: 'Inter' and 'Plus Jakarta Sans' via Google Fonts
 - **Headers**: Gradient text with cyan-to-purple color fill
 - **Code Blocks**: 'JetBrains Mono' and 'Fira Code' for optimal readability
+
+### **Sidebar Navigation**
+- Controller names are used as section titles automatically
+- Endpoints render as nested items under each controller
+- Sections are collapsible to keep large APIs easier to scan
+- Search still works across all operations in the grouped tree
 
 ### **Interactive Elements**
 - **Buttons**: 
@@ -99,6 +112,14 @@ export class AppModule {}
 | `apiVersion` | `string` | Auto-detected | API version number |
 | `path` | `string` | `'/docs'` | Documentation route path |
 | `enableMock` | `boolean` | `true` | Enable mock server |
+
+### **Upgrade Note**
+
+```bash
+npm install nest-scramble@latest
+```
+
+After updating, restart your NestJS server and open `/docs` again. The grouped sidebar works automatically with existing controllers.
 
 ---
 

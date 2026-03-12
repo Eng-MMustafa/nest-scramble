@@ -10,9 +10,23 @@
 [![Node Version](https://img.shields.io/badge/node-%3E%3D18.10.0-brightgreen.svg)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/typescript-%3E%3D5.0.0-blue.svg)](https://www.typescriptlang.org)
 
-## 📋 What's New in v3.0.0
+## 📋 What's New
+
+### ✨ v3.0.3 Documentation Update
+
+- **📂 Controller-Based Sidebar**: Endpoints are grouped by controller name instead of rendering as one flat list
+- **🪄 Collapsible Navigation**: Scalar now renders routes under expandable controller sections in the sidebar
+- **🧭 Better Route Compatibility**: NestJS route params like `:id` are normalized to OpenAPI-compliant `{id}` paths
+- **🧱 Safer Scalar Loading**: The docs page uses Scalar's standalone HTML integration for more reliable loading in real apps
+
+Upgrade with:
+
+```bash
+npm install nest-scramble@latest
+```
 
 ### 🚀 Major Version Update - NestJS 10 & 11 Focus
+
 - **⚡ Breaking**: Dropped NestJS 9 support - now requires NestJS 10.x or 11.x
 - **⚡ Breaking**: Minimum Node.js version is now 18.10.0
 - **⚡ Breaking**: Minimum TypeScript version is now 5.0.0
@@ -26,9 +40,6 @@ NestScrambleModule.forRoot({
   baseUrl: 'http://127.0.0.1:4444'  // ✅ Now works perfectly!
 })
 ```
-
-### 📖 Full Changelog
-Check out the [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
 ---
 
@@ -680,7 +691,7 @@ await demonstrateHashCollisionDetection();
 Nest-Scramble features a **professional, high-end API dashboard** inspired by Stripe and Postman, with refined typography and a polished dark palette for long reading sessions.
 
 **🚀 Key Features:**
-- **Sidebar-Only Navigation** - Fixed 320px sidebar with controller grouping
+- **Sidebar-Only Navigation** - Fixed 320px sidebar with collapsible controller grouping
 - **Single-Request Per Page** - Each endpoint gets its own dedicated view
 - **Three-Column Elite Layout** - Information | Request Editor | Test Panel
 - **Soft Dark Background** - Refined deep blues for a premium, eye-friendly dark mode
@@ -772,7 +783,7 @@ NestScrambleModule.forRoot({
 When you visit `http://localhost:3000/docs`, you'll experience:
 
 - 🎯 **Single-Request Navigation** - Each endpoint on its own dedicated page
-- 📂 **Controller Grouping** - Organized sidebar with uppercase section headers
+- 📂 **Controller Grouping** - Routes grouped by controller name in collapsible sidebar sections
 - 🎨 **Active State Glow** - Cyber-cyan highlight for selected endpoints
 - 📝 **Auto-generated Examples** - Pre-filled mock data in request editor
 - 🧪 **Live Testing** - Send requests directly from the three-column interface
@@ -821,6 +832,16 @@ For complete UI customization guide, see:
 | `GET /docs-json` | OpenAPI 3.0 JSON specification |
 | `GET /docs/json` | Legacy endpoint (same as above) |
 | `GET /docs/spec` | OpenAPI spec as JSON response |
+
+### Upgrading Existing Projects
+
+If you already use Nest-Scramble and want the new grouped sidebar behavior, update to the latest package version and restart your NestJS app:
+
+```bash
+npm install nest-scramble@latest
+```
+
+No controller code changes are required. Grouping is inferred automatically from your existing `@Controller()` classes.
 
 ### Accessing the OpenAPI Spec
 
