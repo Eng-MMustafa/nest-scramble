@@ -177,6 +177,28 @@ describe('TypedClientGenerator', () => {
       const out = gen.generate([controller]);
       expect(out).toContain('${id}');
     });
+
+    it('does NOT produce $${id} (regression: double-replace bug)', () => {
+      const out = gen.generate([controller]);
+      // The bug caused :id → ${id} correctly, then {id} inside ${id} was
+      // replaced again, producing $${id}. Ensure this never regresses.
+      expect(out).not.toContain('$${id}');
+    });
+
+    it('handles {param} style route as well as :param style', () => {
+      const curlyController = makeController({
+        methods: [{
+          name: 'findOne',
+          httpMethod: 'GET',
+          route: '{id}',
+          parameters: [{ name: 'id', type: numberType, decorator: 'Param', parameterLocation: 'path' }],
+          returnType: userDtoType,
+        }],
+      });
+      const out = gen.generate([curlyController]);
+      expect(out).toContain('${id}');
+      expect(out).not.toContain('$${id}');
+    });
   });
 
   // ── GET method — query params ──────────────────────────────────────────────

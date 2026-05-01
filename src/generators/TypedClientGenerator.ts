@@ -146,12 +146,15 @@ export class TypedClientGenerator {
   }
 
   private buildUrlExpr(route: string, pathParams: ParameterInfo[]): string {
-    // Replace :param with ${param} template literal syntax
+    // Replace :param or {param} with ${param} template literal syntax.
+    // IMPORTANT: use a single combined regex so that the second pattern never
+    // re-matches a ${param} fragment produced by the first pattern.
     let result = '/' + route.replace(/^\/+/, '').replace(/\/*$/, '');
     for (const p of pathParams) {
-      result = result.replace(new RegExp(`:${p.name}`, 'g'), `\${${p.name}}`);
-      // Also handle {param} style (OpenAPI normalised)
-      result = result.replace(new RegExp(`\\{${p.name}\\}`, 'g'), `\${${p.name}}`);
+      const pattern = new RegExp(`:${p.name}|\\{${p.name}\\}`, 'g');
+      // Use string concatenation for the replacement to avoid the special
+      // meaning that `$` has inside String.prototype.replace replacement strings.
+      result = result.replace(pattern, '${' + p.name + '}');
     }
     return result;
   }
