@@ -5,6 +5,7 @@ import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PostmanCollectionGenerator } from './generators/PostmanCollectionGenerator';
+import { TypedClientGenerator } from './generators/TypedClientGenerator';
 import { ScannerService } from './scanner/ScannerService';
 import { OpenApiTransformer } from './utils/OpenApiTransformer';
 
@@ -22,7 +23,7 @@ program
   .description('Generate API documentation from NestJS project')
   .argument('<sourcePath>', 'Path to the source directory (e.g., src)')
   .option('-o, --output <file>', 'Output file path', 'openapi.json')
-  .option('-f, --format <type>', 'Output format: openapi or postman', 'openapi')
+  .option('-f, --format <type>', 'Output format: openapi, postman, or client', 'openapi')
   .option('-b, --baseUrl <url>', 'Base URL for the API', 'http://localhost:3000')
   .option('-t, --title <title>', 'API title', 'NestJS API')
   .option('-v, --apiVersion <version>', 'API version', '1.0.0')
@@ -60,6 +61,13 @@ program
         const collection = generator.generateCollection(controllers);
         fs.writeFileSync(outputPath, JSON.stringify(collection, null, 2));
         console.log(`✅ Postman collection saved to: ${outputPath}`);
+      } else if (options.format === 'client') {
+        console.log('🔷 Generating typed TypeScript client...');
+        const clientGenerator = new TypedClientGenerator(options.baseUrl);
+        const clientCode = clientGenerator.generate(controllers, packageJson.version);
+        const clientOutput = options.output === 'openapi.json' ? 'api-client.ts' : outputPath;
+        fs.writeFileSync(clientOutput, clientCode);
+        console.log(`✅ Typed client saved to: ${clientOutput}`);
       } else {
         console.log('📄 Generating OpenAPI specification...');
         const transformer = new OpenApiTransformer(options.baseUrl);
