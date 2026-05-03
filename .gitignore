@@ -32,6 +32,14 @@ logs/
 # Coverage
 coverage/
 
+# Loose debug / temp files
+test-baseurl-fix.js
+test-dto-generation.ts
+_debug*.js
+
+# Coverage
+coverage/
+
 # Temporary files
 *.tmp
 *.temp

@@ -1,32 +1,61 @@
 {
   "name": "nest-scramble",
-  "version": "3.0.5",
+  "version": "3.0.6",
   "description": "A next-generation, decorator-free API documentation engine with Postman generation, live mocking, and typed client SDK generation for NestJS 10 and 11, engineered by Mohamed Mustafa",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
     "nest-scramble": "dist/cli.js"
   },
+  "files": [
+    "dist/",
+    "examples/",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Eng-MMustafa/nest-scramble.git"
+  },
+  "homepage": "https://github.com/Eng-MMustafa/nest-scramble#readme",
+  "bugs": {
+    "url": "https://github.com/Eng-MMustafa/nest-scramble/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "rimraf dist && tsc",
     "dev": "tsc --watch",
     "test": "jest",
+    "test:ci": "jest --coverage --coverageReporters=lcov --coverageReporters=text",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "watch-generate": "node scripts/watch-generate.js"
   },
   "keywords": [
     "nestjs",
+    "nestjs-10",
+    "nestjs-11",
     "documentation",
+    "openapi",
+    "swagger",
     "static-analysis",
     "ast",
     "postman",
     "mocking",
+    "typed-client",
+    "sdk-generator",
     "mohamed-mustafa",
     "typescript",
-    "zero-config"
+    "zero-config",
+    "zero-decorator"
   ],
-  "author": "Mohamed Mustafa <https://github.com/Eng-MMustafa>",
+  "author": {
+    "name": "Mohamed Mustafa",
+    "url": "https://github.com/Eng-MMustafa"
+  },
   "license": "MIT",
   "dependencies": {
     "@faker-js/faker": "^8.4.1",
