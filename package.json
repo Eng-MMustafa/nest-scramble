@@ -15,15 +15,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/Eng-MMustafa/nest-scramble.git"
+    "url": "git+https://github.com/Eng-MMustafa/nest-scramble.git"
   },
   "homepage": "https://github.com/Eng-MMustafa/nest-scramble#readme",
   "bugs": {
     "url": "https://github.com/Eng-MMustafa/nest-scramble/issues"
   },
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   },
   "scripts": {
     "build": "rimraf dist && tsc",
