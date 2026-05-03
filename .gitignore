@@ -32,10 +32,21 @@ logs/
 # Coverage
 coverage/
 
-# Loose debug / temp files
+# Loose debug / temp files (never commit these)
 test-baseurl-fix.js
 test-dto-generation.ts
+test-*.js
 _debug*.js
+
+# Personal publish scripts
+build-and-publish.sh
+
+# AI-session artifacts / internal planning docs
+UI_FEATURES.md
+examples/futuristic-ui-example.ts
+
+# Redundant (package.json `files` field is the source of truth)
+.npmignore
 
 # Coverage
 coverage/
