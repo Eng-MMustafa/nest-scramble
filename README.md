@@ -7,16 +7,63 @@
 [![GitHub stars](https://img.shields.io/github/stars/Eng-MMustafa/nest-scramble.svg)](https://github.com/Eng-MMustafa/nest-scramble)
 [![Author](https://img.shields.io/badge/Author-Mohamed%20Mustafa-blue.svg)](https://github.com/Eng-MMustafa)
 [![NestJS Compatibility](https://img.shields.io/badge/NestJS-10%20%7C%2011-blue.svg)](https://docs.nestjs.com)
+[![Adapters](https://img.shields.io/badge/adapters-Express%20%7C%20Fastify-blue.svg)](https://docs.nestjs.com/techniques/performance)
 [![Node Version](https://img.shields.io/badge/node-%3E%3D18.10.0-brightgreen.svg)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/typescript-%3E%3D5.0.0-blue.svg)](https://www.typescriptlang.org)
 
 ---
 
-## What's New in v3.0.6
+## Screenshots
 
-### Typed HTTP Client SDK Generation ✨
+<!--
+  TODO: add real assets. This is the single highest-impact change for adoption:
+  nobody installs a documentation UI library without seeing the UI.
+    docs/assets/docs-ui-dark.png    - /docs with the futuristic theme
+    docs/assets/docs-ui-light.png   - /docs with the classic theme
+    docs/assets/quickstart.gif      - npm i -> npx nest-scramble init -> /docs
+-->
 
-The biggest quality-of-life addition yet. Nest-Scramble can now **generate a fully-typed TypeScript API client** directly from your NestJS controllers — no OpenAPI tooling required, no extra decorators, zero dependencies in the output.
+_Screenshots coming soon._
+
+---
+
+## What's New in v3.1.0
+
+### Critical fixes
+
+- **Fixed a crash on every production install.** `v3.0.6` required `chokidar` at
+  import time while declaring it as a dev dependency, so `npm ci --omit=dev`
+  installs failed with `Cannot find module 'chokidar'`. It is now an optional peer
+  dependency loaded lazily, and a CI guard prevents the regression.
+- **Fixed NestJS 11 / Express 5 compatibility.** The mock middleware used an
+  anonymous `*` wildcard, which `path-to-regexp` v8 rejects. Route patterns are now
+  selected based on the installed NestJS version, and CI runs an end-to-end suite
+  against both NestJS 10 and 11.
+- **The `path` option now works.** It was previously ignored because the docs
+  routes were hard-coded to `/docs`.
+- **The `theme` and `customDomainIcon` options now work.** `theme` previously only
+  affected a line of console output; `customDomainIcon` was never used.
+
+### Improvements
+
+- **The typed client is now genuinely typed.** DTOs were emitted as
+  `{ [key: string]: unknown }` stubs, which accepted any property. Real interfaces
+  are now generated from your DTO shapes, including nested types, optional
+  properties, enums as string literal unions, and JSDoc comments.
+- **Optional nested DTOs keep their type.** `address?: AddressDto` was analysed as
+  `AddressDto | undefined`, losing the name and producing `oneOf` noise in the spec.
+- **Library output is now silenceable** via `logLevel: 'silent'` and routed through
+  the NestJS logger instead of raw `console.log`.
+- **The Scalar CDN bundle is pinned** to a major version, and can be self-hosted
+  with `scalarUrl` for air-gapped environments.
+
+---
+
+## Typed HTTP Client SDK Generation
+
+Generate a fully-typed TypeScript API client directly from your NestJS
+controllers — no OpenAPI tooling required, no extra decorators, zero dependencies
+in the output.
 
 ```bash
 npx nest-scramble generate src --format client --output ./api-client.ts
@@ -65,27 +112,44 @@ const users = await client.getUsers(1, 10); // fully typed ✅
 
 No extra runtime packages. Uses native `fetch`. Stays in sync with your controllers by re-running the command.
 
-### Other v3.0.6 changes
-
-- Controller-based sidebar grouping is now the default (no config needed)
-- Route param normalisation `:id` → `{id}` for full OpenAPI compliance
-- Scalar standalone HTML integration for more reliable docs rendering
-- `baseUrl` is now respected exactly as configured in the dashboard
+> Methods without an explicit return type cannot be analysed, so their DTO is
+> emitted as `export type X = unknown;` rather than a permissive stub. Add the
+> return type to get a real interface.
 
 ---
 
 ## Why Nest-Scramble
 
-No `@ApiProperty` decorators. No runtime overhead. Nest-Scramble reads your TypeScript source using AST analysis and automatically produces:
+Nest-Scramble reads your TypeScript source with AST analysis, so it never needs
+to load or run your application to understand your API.
 
-| | Nest-Scramble | @nestjs/swagger |
+**The one thing nothing else does:** Nest-Scramble generates your OpenAPI spec
+**without booting your app**. `@nestjs/swagger` — including its CLI plugin — has to
+bootstrap the full Nest application to emit a document, which means a database,
+environment variables, and every external service must be reachable. Nest-Scramble
+only needs the `.ts` files.
+
+That makes these possible:
+
+- Generate the spec in CI with zero infrastructure
+- Generate a frontend client from backend source in a monorepo without running the backend
+- **Diff the API contract between two commits and fail the build on a breaking change**
+
+| | Nest-Scramble | `@nestjs/swagger` (+ CLI plugin) |
 |---|---|---|
-| Analysis | Static AST (compile-time) | Runtime reflection |
-| Decorators required | None | `@ApiProperty` everywhere |
-| Circular references | Auto-detected | Manual workarounds |
-| Performance overhead | Zero | Decorator cost on every request |
+| Needs the app to boot | No | **Yes** |
+| Analysis | Static AST | AST plugin + runtime reflection |
+| Decorators required | None | None with the plugin, `@ApiProperty` without it |
 | Postman collection | Built-in | Third-party export |
-| Typed client SDK | ✅ v3.0.6 | ✗ |
+| Typed client SDK | Built-in | Via external generators |
+| `class-validator` constraints | Yes | Yes |
+| Breaking-change detection | Built-in (`diff`) | Third-party |
+| HTTP adapters | Express, Fastify | Express, Fastify |
+| File uploads / `multipart` | Yes | Yes |
+| Ecosystem maturity | Young | Official, battle-tested |
+
+If you need full OpenAPI fidelity today, `@nestjs/swagger` is the safer choice.
+If you need a spec without booting your app, Nest-Scramble is the only option.
 
 ---
 
@@ -158,27 +222,59 @@ NestScrambleModule.forRoot({
   postmanOutputPath: 'collection.json',  // default: 'collection.json'
   theme: 'futuristic',                   // 'classic' | 'futuristic'
   primaryColor: '#00f2ff',               // any hex colour
-  customDomainIcon: '',                  // favicon URL
+  customDomainIcon: '/logo.png',         // favicon URL
   apiTitle: 'My API',                    // default: from package.json
   apiVersion: '1.0.0',                   // default: from package.json
+  logLevel: 'info',                      // 'silent' | 'error' | 'warn' | 'info' | 'debug'
   useIncrementalScanning: false,         // faster startup via caching
-  enableWatchMode: false,                // auto-regenerate on file changes
   cacheTtl: 86400000,                    // cache TTL in ms (default: 24h)
 })
 ```
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `sourcePath` | `string` | `'src'` | Directory containing your controllers |
+| `sourcePath` | `string` | auto | Directory containing your controllers |
 | `baseUrl` | `string` | auto | Base URL shown in docs and mock server |
-| `path` | `string` | `'/docs'` | Documentation UI endpoint |
-| `enableMock` | `boolean` | `true` | Enable `/scramble-mock/*` proxy endpoints |
-| `autoExportPostman` | `boolean` | `false` | Write Postman collection on startup |
-| `theme` | `'classic' \| 'futuristic'` | `'futuristic'` | UI theme |
-| `primaryColor` | `string` | `'#00f2ff'` | Accent colour (hex) |
+| `path` | `string` | `'/docs'` | Documentation UI endpoint. The spec is served at `<path>-json` |
+| `enableMock` | `boolean` | `true` | Mount the `/scramble-mock/*` endpoints |
+| `autoExportPostman` | `boolean` | `false` | Write a Postman collection on startup |
+| `postmanOutputPath` | `string` | `'collection.json'` | Where to write that collection |
+| `theme` | `'classic' \| 'futuristic'` | `'futuristic'` | `futuristic` renders dark mode, `classic` light mode |
+| `primaryColor` | `string` | `'#00f2ff'` | Accent colour. Must be a hex value, otherwise the default is used |
+| `customDomainIcon` | `string` | `''` | Favicon URL for the docs page |
+| `apiTitle` | `string` | from `package.json` | API title |
+| `apiVersion` | `string` | from `package.json` | API version |
+| `logLevel` | `'silent' \| 'error' \| 'warn' \| 'info' \| 'debug'` | `'info'` | Library output verbosity. Use `'silent'` in CI |
+| `globalPrefix` | `string` | `''` | Must mirror `app.setGlobalPrefix()`, otherwise generated paths omit the prefix |
+| `scalarUrl` | `string` | pinned CDN URL | Override to self-host the Scalar bundle (air-gapped environments) |
 | `useIncrementalScanning` | `boolean` | `false` | Cache AST results between restarts |
-| `enableWatchMode` | `boolean` | `false` | Re-scan on file save |
 | `cacheTtl` | `number` | `86400000` | Cache lifetime in milliseconds |
+
+#### Options that are accepted but ignored
+
+These remain on the type for backwards compatibility and do nothing. Editor
+autocomplete still offers them, so they are listed here rather than left to be
+discovered by trial. Setting any of them logs a warning at startup naming the
+alternative.
+
+| Option | Use instead |
+|---|---|
+| `enableWatchMode` | The programmatic `WatchModeService` |
+| `watchDebounce` | `debounceMs` on `WatchModeService` |
+| `enableHashCollisionDetection` | `hashAlgorithm: 'sha256'` |
+| `defaultAuthType` | Nothing — the generated document declares no security schemes |
+| `enableApiVersioning` | `globalPrefix`, mirroring `app.setGlobalPrefix()` |
+
+### Self-hosting the docs UI
+
+By default the docs page loads the Scalar bundle from jsDelivr, pinned to a major
+version. If your environment has no internet access, serve the asset yourself:
+
+```typescript
+NestScrambleModule.forRoot({
+  scalarUrl: '/static/scalar-api-reference.js',
+})
+```
 
 ---
 
@@ -191,8 +287,11 @@ npx nest-scramble generate src -o openapi.json
 # Generate Postman collection
 npx nest-scramble generate src --format postman -o collection.json
 
-# Generate typed TypeScript client (NEW in v3.0.4, updated in v3.0.6)
+# Generate typed TypeScript client
 npx nest-scramble generate src --format client -o api-client.ts
+
+# Detect breaking API changes
+npx nest-scramble diff ./main-checkout/src ./src --fail-on-breaking
 
 # Custom options
 npx nest-scramble generate src \
@@ -214,6 +313,76 @@ npx nest-scramble --version
 | `-b, --baseUrl <url>` | API base URL | `http://localhost:3000` |
 | `-t, --title <title>` | API title | `NestJS API` |
 | `-v, --apiVersion <ver>` | API version | `1.0.0` |
+| `-p, --globalPrefix <p>` | Mirrors `app.setGlobalPrefix()` | `''` |
+
+---
+
+## Breaking-Change Detection
+
+`nest-scramble diff` compares two versions of your API and tells you whether the
+change is safe to ship. Each side can be an **OpenAPI JSON file or a source
+directory** — and because no application needs to boot, this runs on a pull
+request with no database and no environment.
+
+```bash
+npx nest-scramble diff <base> <head> [options]
+```
+
+```text
+BREAKING  POST /users: maxLength 255 → 120
+BREAKING  POST /users: new required field `currency`
+BREAKING  GET /users: field `total` removed from the response
+WARNING   GET /users: query parameter `legacy` removed
+SAFE      GET /users/summary: added
+
+3 breaking, 1 warning, 1 safe
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `-f, --format <type>` | `text` \| `json` \| `markdown` | `text` |
+| `-o, --output <file>` | Write the report to a file | stdout |
+| `--fail-on-breaking` | Exit `1` when a breaking change is found | off |
+| `-p, --globalPrefix <p>` | Applied when generating from source | `''` |
+
+### How changes are classified
+
+The rules are **asymmetric**, which is the whole point. Narrowing what the server
+*accepts* breaks callers; narrowing what it *returns* breaks readers. A plain
+object diff reports both as "changed" and is therefore useless as a gate.
+
+| Change | Request side | Response side |
+|---|---|---|
+| Field added | **breaking** if required, else safe | safe |
+| Field removed | warning (no longer accepted) | **breaking** (consumers read it) |
+| Field became required | **breaking** | safe |
+| Field became optional | safe | **breaking** (no longer guaranteed) |
+| `maxLength`/`maximum` lowered | **breaking** | safe |
+| `minLength`/`minimum` raised | **breaking** | safe |
+| Constraint or `pattern` added | **breaking** | safe |
+| Constraint relaxed or removed | safe | safe |
+| Enum value removed | **breaking** | warning |
+| Enum value added | safe | warning (consumers may not handle it) |
+| Type changed | **breaking** | **breaking** |
+
+Also breaking: a removed path or operation, a removed response status, a new
+required parameter, and an endpoint that starts requiring authentication.
+
+`$ref`s are resolved on both sides, so a change inside a shared DTO is detected
+rather than hidden behind an unchanged reference. Self-referencing schemas
+terminate safely.
+
+### In CI
+
+```yaml
+- name: Check for breaking API changes
+  run: |
+    git worktree add /tmp/base origin/${{ github.base_ref }}
+    npx nest-scramble diff /tmp/base/src ./src \
+      --fail-on-breaking \
+      --format markdown \
+      --output api-diff.md
+```
 
 ---
 
@@ -241,17 +410,26 @@ fs.writeFileSync('collection.json', JSON.stringify(collection, null, 2));
 
 ## Advanced: Incremental Scanning & Watch Mode
 
-Enable for **10–100× faster restarts** on large projects.
+Enable incremental scanning for faster restarts on large projects.
 
 ```typescript
 NestScrambleModule.forRoot({
   useIncrementalScanning: true,  // cache AST results to scramble-cache.json
-  enableWatchMode: true,         // recompute only changed files
   cacheTtl: 86400000,            // invalidate after 24h
 })
 ```
 
-Cache is invalidated automatically when file content, file size, `tsconfig.json`, or the library version changes.
+> **Watch mode is programmatic only.** It is exposed as `WatchModeService`, not as
+> a `forRoot()` option, and requires the optional peer dependency `chokidar`:
+> `npm install chokidar`.
+
+The cache is invalidated automatically when the file content, the file size,
+`tsconfig.json`, or the installed `nest-scramble` version changes — so upgrading
+the package never serves you a spec produced by the previous analyser.
+
+Incremental scanning produces **exactly** the same result as a full scan; a
+parity test asserts both paths agree on every controller and on the generated
+document.
 
 **Add to `.gitignore`:**
 
@@ -260,7 +438,7 @@ scramble-cache.json
 .scramble-cache.json
 ```
 
-**Benchmark (typical project):**
+**Indicative timings** (single mid-size project, not a reproducible benchmark suite):
 
 | Scenario | Time |
 |---|---|
@@ -290,6 +468,23 @@ With `enableMock: true` (default), all routes are available under `/scramble-moc
 GET /scramble-mock/users/1
 # → { "id": 1, "name": "Jane Smith", "email": "jane@example.com", "createdAt": "..." }
 ```
+
+The mock answers on **exactly** the paths the generated document advertises, so
+`globalPrefix` and `@Version()` are included:
+
+```bash
+# With globalPrefix: 'api' and @Controller({ path: 'users', version: '2' })
+GET /scramble-mock/api/v2/users/1
+```
+
+Status codes follow your code: `@HttpCode(202)` returns `202`, and `204` returns
+an empty body. `@All()` routes answer every verb.
+
+**Route precedence differs from NestJS on purpose.** NestJS resolves overlapping
+routes in declaration order, so an app that declares `@Get(':id')` before
+`@Get('me')` never reaches `me`. The mock prefers the more specific route
+instead — returning the `:id` payload for a request to a literal `me` route is
+never the useful answer from a documentation tool.
 
 Mock values are field-name-aware:
 - `email` → `faker.internet.email()`
@@ -367,9 +562,96 @@ jobs:
 - Circular references (auto-detected and resolved)
 
 **NestJS decorators:**
-- HTTP methods: `@Get`, `@Post`, `@Put`, `@Patch`, `@Delete`
-- Parameters: `@Param`, `@Query`, `@Body`
-- Controllers: `@Controller` (path & group name)
+- HTTP methods: `@Get`, `@Post`, `@Put`, `@Patch`, `@Delete`, `@Options`, `@Head`, `@All`
+- Parameters: `@Param`, `@Query`, `@Body`, `@Headers`, `@UploadedFile`, `@UploadedFiles`
+- Uploads: `FileInterceptor`, `FilesInterceptor`, `FileFieldsInterceptor`, `AnyFilesInterceptor`
+- Controllers: `@Controller('path')`, `@Controller(['a', 'b'])`, `@Controller({ path, version })`
+- Status: `@HttpCode(204)` and `@HttpCode(HttpStatus.NO_CONTENT)`
+- Auth: `@UseGuards`, `@Version`, `@SetMetadata('isPublic', true)`
+
+**`class-validator` decorators** — read from the AST, never evaluated, so
+`class-validator` does not need to be installed for analysis to work:
+
+| Decorator | OpenAPI output |
+|---|---|
+| `@IsEmail`, `@IsUUID`, `@IsUrl`, `@IsDateString`, `@IsIP`, `@IsMongoId`, ... | `format` |
+| `@MinLength`, `@MaxLength`, `@Length` | `minLength`, `maxLength` |
+| `@Min`, `@Max` | `minimum`, `maximum` |
+| `@IsPositive`, `@IsNegative` | `exclusiveMinimum`, `exclusiveMaximum` |
+| `@IsInt` | `type: integer` |
+| `@IsDivisibleBy` | `multipleOf` |
+| `@Matches(/re/)` | `pattern` |
+| `@IsIn([...])` | `enum` |
+| `@ArrayMinSize`, `@ArrayMaxSize`, `@ArrayUnique` | `minItems`, `maxItems`, `uniqueItems` |
+| `@IsOptional` | removed from `required` |
+| `@IsNotEmpty`, `@IsDefined` | added to `required` |
+
+### HTTP adapters
+
+Both NestJS adapters are supported and both are exercised end to end in CI
+against NestJS 10 and 11:
+
+```typescript
+// Express (default)
+const app = await NestFactory.create(AppModule);
+
+// Fastify
+const app = await NestFactory.create(AppModule, new FastifyAdapter());
+```
+
+This works because nothing in the library touches an adapter-specific response
+object: the docs controller uses Nest's declarative `@Header()` and returns its
+payload, and the mock middleware uses the raw Node HTTP API. There is no adapter
+detection to get wrong.
+
+### File uploads
+
+Upload routes are documented as `multipart/form-data`. The field name is read
+from the **interceptor**, not from `@UploadedFile()` — that decorator only takes
+pipes, so the name lives with the interceptor:
+
+```typescript
+@Post('avatar')
+@UseInterceptors(FileInterceptor('avatar'))
+upload(@UploadedFile() file: Express.Multer.File): MediaDto {}
+```
+
+```json
+"requestBody": {
+  "required": true,
+  "content": {
+    "multipart/form-data": {
+      "schema": {
+        "type": "object",
+        "properties": { "avatar": { "type": "string", "format": "binary" } },
+        "required": ["avatar"]
+      }
+    }
+  }
+}
+```
+
+| Interceptor | Documented as |
+|---|---|
+| `FileInterceptor('avatar')` | single binary field `avatar` |
+| `FilesInterceptor('photos', 10)` | array of binaries, `maxItems: 10` |
+| `FileFieldsInterceptor([{ name, maxCount }])` | one field per entry |
+| `AnyFilesInterceptor()` | generic `files` array |
+
+A `@Body()` parameter on the same route is merged into the multipart schema,
+because in a multipart payload the metadata travels as sibling form fields.
+
+Upload support reaches every consumer, not just the spec:
+
+- **Typed client** builds `FormData` and types the file as `File` / `File[]`
+- **Postman export** uses `formdata` mode with a file picker per field
+- **Contract diff** compares multipart bodies and flags a JSON ↔ multipart switch
+
+### Known limitations
+
+- `@Controller(['a', 'b'])` documents the first path only
+- Methods without an explicit return type cannot have their response inferred
+- A file interceptor applied at class level is not read (method level only)
 
 ---
 
@@ -381,6 +663,22 @@ Verify `sourcePath` points to the directory containing your `@Controller()` clas
 
 ```typescript
 NestScrambleModule.forRoot({ sourcePath: 'src' })
+```
+
+When `sourcePath` is omitted it is detected by trying `src`, `lib`, `app` and
+`source` in that order, recursively, and preferring whichever one actually
+declares a controller. A monorepo layout such as `apps/api/src` is not guessed —
+set it explicitly.
+
+**The documented server URL is wrong (`0.0.0.0`, or the wrong port)**
+
+When `baseUrl` is omitted it is derived from `HOST` and `PORT`. A wildcard bind
+address such as `HOST=0.0.0.0` — the norm in containers — is rewritten to
+`localhost`, because a browser cannot connect to it. If your API is reached
+through a proxy or a public domain, set the URL explicitly:
+
+```typescript
+NestScrambleModule.forRoot({ baseUrl: 'https://api.example.com' })
 ```
 
 **`/docs` returns 401 Unauthorized**
@@ -450,17 +748,27 @@ npm install nest-scramble@latest
 
 ## Roadmap
 
-- [x] OpenAPI 3.0 generation (static AST)
-- [x] Interactive Scalar UI with controller grouping
+Shipped:
+
+- [x] OpenAPI 3.0 generation from static AST — no app bootstrap required
+- [x] Interactive Scalar UI with controller grouping and configurable path/theme
 - [x] Postman collection export
 - [x] Live mock server
-- [x] Incremental scanning & watch mode
-- [x] Transitive dependency tracking
-- [x] Typed TypeScript client SDK (v3.0.6)
+- [x] Incremental scanning with transitive dependency tracking
+- [x] Typed TypeScript client SDK with real interfaces generated from your DTOs
+- [x] `class-validator` constraints in the generated schema
+- [x] `app.setGlobalPrefix()` support via `globalPrefix`
+- [x] `@HttpCode`, `@All`, `@Options`, `@Head`, and object-form `@Controller({ path })`
+- [x] Method JSDoc as the operation summary, description, and `deprecated` flag
+- [x] Mock server that answers on exactly the paths the document advertises
+- [x] `nest-scramble diff` — fail a PR when the API contract breaks
+- [x] Express **and** Fastify adapters, both verified end to end in CI
+- [x] `multipart/form-data` uploads in the spec, typed client, Postman export and diff
+
+Next, in priority order:
+
 - [ ] Insomnia / Bruno collection export
-- [ ] `@ScrambleDoc()` lightweight metadata decorator
 - [ ] GraphQL schema support
-- [ ] Plugin API for custom analyzers
 
 ---
 

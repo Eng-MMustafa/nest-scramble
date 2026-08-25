@@ -1,41 +1,28 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
-import { ClassDeclaration, Decorator, MethodDeclaration, Node, Project, SourceFile } from 'ts-morph';
-import { AnalyzedType, DtoAnalyzer } from '../utils/DtoAnalyzer';
-import { CacheManager, CachedController } from '../cache/CacheManager';
+import { Project } from 'ts-morph';
+import { CacheManager } from '../cache/CacheManager';
 import { DependencyTracker } from '../tracker/DependencyTracker';
 import { FileChangeEvent } from '../watcher/FileWatcher';
+import {
+  ControllerInfo as ScannedControllerInfo,
+  MethodInfo,
+  ParameterInfo,
+  resolveSourcePath,
+  ScannerService,
+} from './ScannerService';
+import { ScrambleLogger } from '../utils/ScrambleLogger';
 import * as path from 'path';
 import * as fs from 'fs';
 
-export interface ControllerInfo {
-  name: string;
-  path: string;
-  methods: MethodInfo[];
-  hasGuards?: boolean;
-  version?: string | string[];
-  guardTypes?: string[];
-  isPublic?: boolean;
+/**
+ * The incremental scanner records which file a controller came from so the cache
+ * can be invalidated per file. Everything else is the canonical shape.
+ */
+export interface ControllerInfo extends ScannedControllerInfo {
   filePath?: string;
 }
 
-export interface MethodInfo {
-  name: string;
-  httpMethod: string;
-  route: string;
-  parameters: ParameterInfo[];
-  returnType: AnalyzedType;
-  hasGuards?: boolean;
-  version?: string | string[];
-  guardTypes?: string[];
-  isPublic?: boolean;
-}
-
-export interface ParameterInfo {
-  name: string;
-  type: AnalyzedType;
-  decorator?: string;
-  parameterLocation?: 'path' | 'query' | 'header' | 'body';
-}
+export type { MethodInfo, ParameterInfo };
 
 export interface ScanOptions {
   useCache?: boolean;
@@ -47,7 +34,11 @@ export interface ScanOptions {
 
 export class IncrementalScannerService {
   private project: Project | null = null;
-  private dtoAnalyzer = new DtoAnalyzer();
+  /**
+   * Extraction is delegated so the incremental path and the normal path can
+   * never disagree about what a controller looks like.
+   */
+  private scanner = new ScannerService();
   private cacheManager: CacheManager;
   private dependencyTracker: DependencyTracker | null = null;
   private sourcePath: string = '';
@@ -68,17 +59,17 @@ export class IncrementalScannerService {
    */
   initialize(sourcePath: string): void {
     if (this.isInitialized) {
-      console.log('[IncrementalScanner] Already initialized');
+      ScrambleLogger.info('[IncrementalScanner] Already initialized');
       return;
     }
 
     const hostProjectRoot = process.cwd();
-    this.sourcePath = `${hostProjectRoot}/${sourcePath}`;
-    this.tsconfigPath = `${hostProjectRoot}/tsconfig.json`;
+    this.sourcePath = resolveSourcePath(sourcePath, hostProjectRoot);
+    this.tsconfigPath = path.join(hostProjectRoot, 'tsconfig.json');
 
-    console.log(`[IncrementalScanner] Initializing scanner...`);
-    console.log(`[IncrementalScanner] Source: ${this.sourcePath}`);
-    console.log(`[IncrementalScanner] Config: ${this.tsconfigPath}`);
+    ScrambleLogger.info(`[IncrementalScanner] Initializing scanner...`);
+    ScrambleLogger.info(`[IncrementalScanner] Source: ${this.sourcePath}`);
+    ScrambleLogger.info(`[IncrementalScanner] Config: ${this.tsconfigPath}`);
 
     this.initializeProject();
     this.loadCache();
@@ -91,7 +82,7 @@ export class IncrementalScannerService {
   private initializeProject(): void {
     try {
       if (!fs.existsSync(this.tsconfigPath)) {
-        console.warn(`[IncrementalScanner] tsconfig.json not found, creating project without config`);
+        ScrambleLogger.warn(`[IncrementalScanner] tsconfig.json not found, creating project without config`);
         this.project = new Project({
           skipAddingFilesFromTsConfig: true,
         });
@@ -104,7 +95,7 @@ export class IncrementalScannerService {
 
       this.dependencyTracker = new DependencyTracker(this.project);
     } catch (error) {
-      console.error(`[IncrementalScanner] Error initializing project:`, error);
+      ScrambleLogger.error(`[IncrementalScanner] Error initializing project:`, error);
       this.project = new Project({
         skipAddingFilesFromTsConfig: true,
       });
@@ -126,7 +117,7 @@ export class IncrementalScannerService {
       const currentTsConfigHash = this.cacheManager.calculateTsConfigHash(this.tsconfigPath);
       
       if (this.cacheManager.hasTsConfigChanged(currentTsConfigHash)) {
-        console.log('[IncrementalScanner] tsconfig.json changed, invalidating cache');
+        ScrambleLogger.info('[IncrementalScanner] tsconfig.json changed, invalidating cache');
         this.cacheManager.invalidate();
         return;
       }
@@ -144,32 +135,33 @@ export class IncrementalScannerService {
     }
 
     if (!this.project) {
-      console.error(`[IncrementalScanner] Project not initialized`);
+      ScrambleLogger.error(`[IncrementalScanner] Project not initialized`);
       return [];
     }
 
-    console.log(`[IncrementalScanner] Starting full scan...`);
+    ScrambleLogger.info(`[IncrementalScanner] Starting full scan...`);
 
     try {
-      const pattern = `${this.sourcePath}/**/*.ts`;
+      // ts-morph globs use forward slashes even on Windows.
+      const pattern = `${this.sourcePath.replace(/\\/g, '/')}/**/*.ts`;
       this.project.addSourceFilesAtPaths(pattern);
     } catch (error) {
-      console.error(`[IncrementalScanner] Error adding source files:`, error);
+      ScrambleLogger.error(`[IncrementalScanner] Error adding source files:`, error);
       return [];
     }
 
     const sourceFiles = this.project.getSourceFiles();
-    console.log(`[IncrementalScanner] Loaded ${sourceFiles.length} file(s)`);
+    ScrambleLogger.info(`[IncrementalScanner] Loaded ${sourceFiles.length} file(s)`);
 
     const controllers: ControllerInfo[] = [];
     const controllerPaths: string[] = [];
 
     for (const sourceFile of sourceFiles) {
       const filePath = sourceFile.getFilePath();
-      const controllerInfo = this.scanFile(filePath);
-      
-      if (controllerInfo) {
-        controllers.push(controllerInfo);
+      const found = this.scanFileAll(filePath);
+
+      if (found.length > 0) {
+        controllers.push(...found);
         controllerPaths.push(filePath);
       }
     }
@@ -185,16 +177,31 @@ export class IncrementalScannerService {
 
     this.cacheManager.save();
 
-    console.log(`[IncrementalScanner] Scan complete: ${controllers.length} controller(s)`);
+    ScrambleLogger.info(`[IncrementalScanner] Scan complete: ${controllers.length} controller(s)`);
     return controllers;
   }
 
   /**
-   * Scan a single file and update cache
+   * Scans a single file and updates the cache.
+   *
+   * @deprecated Returns only the first controller in the file. Use
+   * {@link scanFileAll}, which reports every `@Controller()` class.
    */
   scanFile(filePath: string): ControllerInfo | null {
+    return this.scanFileAll(filePath)[0] ?? null;
+  }
+
+  /**
+   * Scans a single file and updates the cache, returning every controller it
+   * declares.
+   *
+   * A file may legitimately declare several `@Controller()` classes; the previous
+   * implementation kept only `controllerClasses[0]`, so the rest never reached
+   * the generated document when incremental scanning was enabled.
+   */
+  scanFileAll(filePath: string): ControllerInfo[] {
     if (!this.project) {
-      return null;
+      return [];
     }
 
     const normalizedPath = path.normalize(filePath);
@@ -203,8 +210,8 @@ export class IncrementalScannerService {
 
     const cached = this.cacheManager.getController(normalizedPath);
     if (cached && !this.cacheManager.hasFileChanged(normalizedPath, fileHash)) {
-      console.log(`[IncrementalScanner] Using cached data for: ${normalizedPath}`);
-      return cached.controllerInfo;
+      ScrambleLogger.info(`[IncrementalScanner] Using cached data for: ${normalizedPath}`);
+      return cached.controllerInfos;
     }
 
     let sourceFile = this.project.getSourceFile(normalizedPath);
@@ -213,47 +220,57 @@ export class IncrementalScannerService {
       try {
         sourceFile = this.project.addSourceFileAtPath(normalizedPath);
       } catch (error) {
-        console.error(`[IncrementalScanner] Error adding file ${normalizedPath}:`, error);
-        return null;
+        ScrambleLogger.error(`[IncrementalScanner] Error adding file ${normalizedPath}:`, error);
+        return [];
       }
     } else {
       sourceFile.refreshFromFileSystemSync();
     }
 
-    const controllerClasses = sourceFile.getClasses().filter(cls => this.hasControllerDecorator(cls));
+    const controllerClasses = sourceFile
+      .getClasses()
+      .filter(cls => this.scanner.hasControllerDecorator(cls));
 
     if (controllerClasses.length === 0) {
       this.cacheManager.removeController(normalizedPath);
-      return null;
+      return [];
     }
 
-    const controllerClass = controllerClasses[0];
-    const controllerInfo = this.extractControllerInfo(controllerClass);
+    const controllerInfos: ControllerInfo[] = [];
 
-    if (controllerInfo) {
+    for (const controllerClass of controllerClasses) {
+      const controllerInfo: ControllerInfo | null = this.scanner.extractControllerInfo(controllerClass);
+      if (!controllerInfo) continue;
+
       controllerInfo.filePath = normalizedPath;
-
-      const dependencies = this.dependencyTracker?.analyzeDependencies(normalizedPath) || [];
-
-      const cachedController: CachedController = {
-        filePath: normalizedPath,
-        fileHash,
-        fileSize,
-        controllerInfo,
-        dependencies,
-        lastScanned: Date.now(),
-      };
-
-      this.cacheManager.setController(normalizedPath, cachedController);
-
-      for (const dep of dependencies) {
-        this.cacheManager.addDependency(normalizedPath, dep);
-      }
-
-      console.log(`[IncrementalScanner] Scanned: ${controllerInfo.name} (${controllerInfo.methods.length} endpoints)`);
+      controllerInfos.push(controllerInfo);
     }
 
-    return controllerInfo;
+    if (controllerInfos.length === 0) {
+      this.cacheManager.removeController(normalizedPath);
+      return [];
+    }
+
+    const dependencies = this.dependencyTracker?.analyzeDependencies(normalizedPath) || [];
+
+    this.cacheManager.setController(normalizedPath, {
+      filePath: normalizedPath,
+      fileHash,
+      fileSize,
+      controllerInfos,
+      dependencies,
+      lastScanned: Date.now(),
+    });
+
+    for (const dep of dependencies) {
+      this.cacheManager.addDependency(normalizedPath, dep);
+    }
+
+    for (const info of controllerInfos) {
+      ScrambleLogger.info(`[IncrementalScanner] Scanned: ${info.name} (${info.methods.length} endpoints)`);
+    }
+
+    return controllerInfos;
   }
 
   /**
@@ -261,11 +278,11 @@ export class IncrementalScannerService {
    */
   processFileChanges(events: FileChangeEvent[]): Map<string, ControllerInfo | null> {
     if (!this.isInitialized || !this.project) {
-      console.error('[IncrementalScanner] Scanner not initialized');
+      ScrambleLogger.error('[IncrementalScanner] Scanner not initialized');
       return new Map();
     }
 
-    console.log(`[IncrementalScanner] Processing ${events.length} file change(s)`);
+    ScrambleLogger.info(`[IncrementalScanner] Processing ${events.length} file change(s)`);
 
     const affectedFiles = new Set<string>();
     const results = new Map<string, ControllerInfo | null>();
@@ -300,7 +317,7 @@ export class IncrementalScannerService {
 
     this.cacheManager.save();
 
-    console.log(`[IncrementalScanner] Updated ${results.size} file(s)`);
+    ScrambleLogger.info(`[IncrementalScanner] Updated ${results.size} file(s)`);
     return results;
   }
 
@@ -308,7 +325,7 @@ export class IncrementalScannerService {
    * Handle file deletion
    */
   private handleFileDelete(filePath: string, affectedFiles: Set<string>): void {
-    console.log(`[IncrementalScanner] File deleted: ${filePath}`);
+    ScrambleLogger.info(`[IncrementalScanner] File deleted: ${filePath}`);
 
     const dependents = this.cacheManager.getDependentControllers(filePath);
     dependents.forEach(dep => affectedFiles.add(dep));
@@ -332,7 +349,7 @@ export class IncrementalScannerService {
     const controllers: ControllerInfo[] = [];
     
     for (const [_, cached] of this.cacheManager.getAllControllers()) {
-      controllers.push(cached.controllerInfo);
+      controllers.push(...cached.controllerInfos);
     }
 
     return controllers;
@@ -363,7 +380,7 @@ export class IncrementalScannerService {
    * Cleanup resources
    */
   cleanup(): void {
-    console.log('[IncrementalScanner] Cleaning up resources...');
+    ScrambleLogger.info('[IncrementalScanner] Cleaning up resources...');
     
     this.cacheManager.save();
     
@@ -377,218 +394,4 @@ export class IncrementalScannerService {
     this.isInitialized = false;
   }
 
-  private hasControllerDecorator(cls: ClassDeclaration): boolean {
-    return cls.getDecorators().some(decorator => {
-      const callExpression = decorator.getCallExpression();
-      if (!callExpression) return false;
-      const expression = callExpression.getExpression();
-      return Node.isIdentifier(expression) && expression.getText() === 'Controller';
-    });
-  }
-
-  private extractControllerInfo(cls: ClassDeclaration): ControllerInfo | null {
-    const controllerDecorator = cls.getDecorators().find(decorator => {
-      const callExpression = decorator.getCallExpression();
-      if (!callExpression) return false;
-      const expression = callExpression.getExpression();
-      return Node.isIdentifier(expression) && expression.getText() === 'Controller';
-    });
-
-    if (!controllerDecorator) return null;
-
-    const controllerPath = this.extractDecoratorArgument(controllerDecorator) || '';
-    const version = this.extractVersionDecorator(cls);
-    const guardTypes = this.extractGuardTypes(cls);
-    const hasGuards = guardTypes.length > 0;
-    const isPublic = this.isPublicDecorator(cls);
-
-    const methods: MethodInfo[] = [];
-
-    for (const method of cls.getMethods()) {
-      const methodInfo = this.extractMethodInfo(method);
-      if (methodInfo) {
-        methods.push(methodInfo);
-      }
-    }
-
-    return {
-      name: cls.getName() || 'UnknownController',
-      path: controllerPath,
-      methods,
-      hasGuards,
-      version,
-      guardTypes,
-      isPublic,
-    };
-  }
-
-  private extractDecoratorArgument(decorator: Decorator): string | undefined {
-    const callExpression = decorator.getCallExpression();
-    if (!callExpression) return undefined;
-    const args = callExpression.getArguments();
-    if (args.length === 0) return '';
-    const firstArg = args[0];
-    if (Node.isStringLiteral(firstArg)) {
-      return firstArg.getLiteralValue();
-    }
-    return undefined;
-  }
-
-  private extractMethodInfo(method: MethodDeclaration): MethodInfo | null {
-    const httpDecorator = method.getDecorators().find(decorator => {
-      const callExpression = decorator.getCallExpression();
-      if (!callExpression) return false;
-      const expression = callExpression.getExpression();
-      if (!Node.isIdentifier(expression)) return false;
-      const decoratorName = expression.getText();
-      return ['Get', 'Post', 'Put', 'Delete', 'Patch'].includes(decoratorName);
-    });
-
-    if (!httpDecorator) return null;
-
-    const callExpression = httpDecorator.getCallExpression()!;
-    const expression = callExpression.getExpression() as any;
-    const httpMethod = expression.getText().toUpperCase();
-    const route = this.extractDecoratorArgument(httpDecorator) || '';
-
-    const version = this.extractVersionDecorator(method);
-    const guardTypes = this.extractGuardTypes(method);
-    const hasGuards = guardTypes.length > 0;
-    const isPublic = this.isPublicDecorator(method);
-
-    const parameters: ParameterInfo[] = method.getParameters().map(param => {
-      const decoratorText = param.getDecorators().map(d => d.getText()).join(' ');
-      let parameterLocation: 'path' | 'query' | 'header' | 'body' | undefined;
-
-      if (decoratorText.includes('@Body')) {
-        parameterLocation = 'body';
-      } else if (decoratorText.includes('@Param')) {
-        parameterLocation = 'path';
-      } else if (decoratorText.includes('@Query')) {
-        parameterLocation = 'query';
-      } else if (decoratorText.includes('@Headers')) {
-        parameterLocation = 'header';
-      }
-
-      return {
-        name: param.getName(),
-        type: this.dtoAnalyzer.analyzeType(param.getType()),
-        decorator: decoratorText,
-        parameterLocation,
-      };
-    });
-
-    const returnType = this.dtoAnalyzer.analyzeType(method.getReturnType());
-
-    return {
-      name: method.getName(),
-      httpMethod,
-      route,
-      parameters,
-      returnType,
-      hasGuards,
-      version,
-      guardTypes,
-      isPublic,
-    };
-  }
-
-  private extractVersionDecorator(node: ClassDeclaration | MethodDeclaration): string | string[] | undefined {
-    const versionDecorator = node.getDecorators().find(decorator => {
-      const callExpression = decorator.getCallExpression();
-      if (!callExpression) return false;
-      const expression = callExpression.getExpression();
-      return Node.isIdentifier(expression) && expression.getText() === 'Version';
-    });
-
-    if (!versionDecorator) return undefined;
-
-    const callExpression = versionDecorator.getCallExpression();
-    if (!callExpression) return undefined;
-
-    const args = callExpression.getArguments();
-    if (args.length === 0) return undefined;
-
-    const firstArg = args[0];
-
-    if (Node.isStringLiteral(firstArg)) {
-      return firstArg.getLiteralValue();
-    }
-
-    if (Node.isArrayLiteralExpression(firstArg)) {
-      const versions: string[] = [];
-      for (const element of firstArg.getElements()) {
-        if (Node.isStringLiteral(element)) {
-          versions.push(element.getLiteralValue());
-        }
-      }
-      return versions.length > 0 ? versions : undefined;
-    }
-
-    return undefined;
-  }
-
-  private extractGuardTypes(node: ClassDeclaration | MethodDeclaration): string[] {
-    const guardTypes: string[] = [];
-
-    const useGuardsDecorators = node.getDecorators().filter(decorator => {
-      const callExpression = decorator.getCallExpression();
-      if (!callExpression) return false;
-      const expression = callExpression.getExpression();
-      return Node.isIdentifier(expression) && expression.getText() === 'UseGuards';
-    });
-
-    for (const decorator of useGuardsDecorators) {
-      const callExpression = decorator.getCallExpression();
-      if (!callExpression) continue;
-
-      const args = callExpression.getArguments();
-      for (const arg of args) {
-        if (Node.isIdentifier(arg)) {
-          guardTypes.push(arg.getText());
-        }
-        else if (Node.isCallExpression(arg)) {
-          const expr = arg.getExpression();
-          if (Node.isIdentifier(expr) && expr.getText() === 'AuthGuard') {
-            const guardArgs = arg.getArguments();
-            if (guardArgs.length > 0 && Node.isStringLiteral(guardArgs[0])) {
-              const strategy = guardArgs[0].getLiteralValue();
-              guardTypes.push(`AuthGuard(${strategy})`);
-            } else {
-              guardTypes.push('AuthGuard');
-            }
-          }
-        }
-      }
-    }
-
-    return guardTypes;
-  }
-
-  private isPublicDecorator(node: ClassDeclaration | MethodDeclaration): boolean {
-    return node.getDecorators().some(decorator => {
-      const callExpression = decorator.getCallExpression();
-      if (!callExpression) return false;
-      const expression = callExpression.getExpression();
-      
-      if (Node.isIdentifier(expression) && expression.getText() === 'Public') {
-        return true;
-      }
-
-      if (Node.isIdentifier(expression) && expression.getText() === 'SetMetadata') {
-        const args = callExpression.getArguments();
-        if (args.length >= 2) {
-          const firstArg = args[0];
-          const secondArg = args[1];
-          if (Node.isStringLiteral(firstArg) && firstArg.getLiteralValue() === 'isPublic') {
-            if (secondArg.getText() === 'true') {
-              return true;
-            }
-          }
-        }
-      }
-
-      return false;
-    });
-  }
 }

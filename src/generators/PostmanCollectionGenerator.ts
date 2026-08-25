@@ -18,12 +18,21 @@ interface PostmanItem {
   request?: PostmanRequest; // for requests
 }
 
+/** One entry of a `formdata` body; `file` entries carry a picker instead of a value. */
+interface PostmanFormField {
+  key: string;
+  type: 'file' | 'text';
+  value?: string;
+  src?: string[];
+}
+
 interface PostmanRequest {
   method: string;
   header: PostmanHeader[];
   body?: {
     mode: string;
     raw?: string;
+    formdata?: PostmanFormField[];
   };
   url: {
     raw: string;
@@ -117,9 +126,30 @@ export class PostmanCollectionGenerator {
       url,
     };
 
-    // Add body if there's a @Body parameter
     const bodyParam = method.parameters.find(p => p.decorator?.includes('@Body'));
-    if (bodyParam && bodyParam.type.properties) {
+    const fileFields = method.fileFields ?? [];
+
+    if (fileFields.length > 0) {
+      // A multipart endpoint rejects a raw JSON body, so the exported request
+      // has to use Postman's formdata mode with a file picker per field.
+      const formdata: PostmanFormField[] = fileFields.map(field => ({
+        key: field.name,
+        type: 'file',
+        src: [],
+      }));
+
+      if (bodyParam?.type.properties) {
+        const mockData = MockGenerator.generateMock(bodyParam.type);
+        for (const [key, value] of Object.entries(mockData)) {
+          formdata.push({ key, type: 'text', value: String(value) });
+        }
+      }
+
+      request.body = { mode: 'formdata', formdata };
+
+      // Postman sets the multipart boundary itself.
+      request.header = request.header.filter(header => header.key !== 'Content-Type');
+    } else if (bodyParam && bodyParam.type.properties) {
       const mockData = MockGenerator.generateMock(bodyParam.type);
       request.body = {
         mode: 'raw',

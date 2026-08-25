@@ -25,13 +25,117 @@ jobs:
 
       - run: npm ci
 
+      # Linting does not depend on the Node version, so it runs on one leg of
+      # the matrix rather than three.
+      - name: Lint
+        if: matrix.node-version == '20.x'
+        run: npm run lint
+
       - run: npm run build
+
+      # Catches dev-only dependencies leaking into the runtime import graph,
+      # which would crash every `npm ci --omit=dev` install.
+      - run: npm run verify:runtime-deps
 
       - run: npm test
 
+  compat:
+    name: NestJS ${{ matrix.nest-version }} compatibility
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        nest-version: ['10', '11']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+
+      - run: npm ci
+
+      # Both adapters are installed so the e2e suite can boot each one. Fastify
+      # exposes a different response API, which used to break the docs routes.
+      - name: Install NestJS ${{ matrix.nest-version }}
+        run: |
+          npm install --no-save \
+            @nestjs/common@^${{ matrix.nest-version }} \
+            @nestjs/core@^${{ matrix.nest-version }} \
+            @nestjs/platform-express@^${{ matrix.nest-version }} \
+            @nestjs/platform-fastify@^${{ matrix.nest-version }}
+
+      - run: npm run build
+
+      - name: Boot real Nest apps on Express and Fastify
+        run: npm run test:e2e
+
+  api-contract:
+    name: API contract diff
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # A full clone is needed to materialise the base branch below.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      # Dogfooding: the library reports on its own example API using its own
+      # diff. No application is booted, so this needs no services of any kind.
+      #
+      # This step reports rather than gates: the fixture is test data and is
+      # expected to change. `--fail-on-breaking` belongs in a consumer's own
+      # pipeline, and is covered by test/e2e/cli.e2e.test.ts.
+      - name: Compare the API contract against the base branch
+        run: |
+          set -euo pipefail
+          git worktree add /tmp/base "origin/${{ github.base_ref }}"
+
+          BASE_FIXTURE=/tmp/base/test/fixtures/sample-app
+
+          # The fixture may not exist on the base branch yet, which is not a
+          # failure — it just means there is nothing to compare against.
+          if [ ! -d "$BASE_FIXTURE" ]; then
+            echo "Base branch has no sample-app fixture; skipping the diff." \
+              >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          node dist/cli.js diff \
+            "$BASE_FIXTURE" \
+            ./test/fixtures/sample-app \
+            --format markdown \
+            --output api-diff.md
+
+          cat api-diff.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the report
+        if: hashFiles('api-diff.md') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-diff
+          path: api-diff.md
+
+  publish:
     name: Publish to npm
     runs-on: ubuntu-latest
-    needs: test
+    # `compat` is a gate, not decoration: it boots real Nest apps on both
+    # adapters and checks the tarball itself. Depending on `test` alone would
+    # let a tag publish a build whose Fastify routes or packaging are broken.
+    needs: [test, compat]
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       id-token: write

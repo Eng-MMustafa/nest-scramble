@@ -44,8 +44,10 @@ This project follows a [Contributor Code of Conduct](CODE_OF_CONDUCT.md). By par
 |---|---|
 | `npm run build` | Compile TypeScript → `dist/` |
 | `npm run dev` | Watch mode compilation |
-| `npm test` | Run all 75 tests |
-| `npm run test:ci` | Run tests with lcov coverage |
+| `npm test` | Unit suite |
+| `npm run test:e2e` | Boots real NestJS apps and spawns the CLI — **requires `npm run build` first** |
+| `npm run test:ci` | Unit suite with lcov coverage |
+| `npm run verify:runtime-deps` | Fails if the entry point imports a dev-only dependency |
 | `npm run lint` | ESLint check |
 | `npm run lint:fix` | ESLint auto-fix |
 
@@ -54,10 +56,24 @@ This project follows a [Contributor Code of Conduct](CODE_OF_CONDUCT.md). By par
 ## Running Tests
 
 ```bash
-npm test
+npm test                      # unit suite
+npm run build && npm run test:e2e   # integration suite
 ```
 
-All tests live in `test/`. Please add or update tests for any changed behaviour. The CI pipeline runs on Node 18, 20, and 22 — ensure your changes pass on all.
+Tests live in `test/`, with the integration suite under `test/e2e/`. The e2e suite
+boots real NestJS applications on **both the Express and Fastify adapters** and
+spawns the built CLI as a child process, so `dist/` must be up to date before it
+runs.
+
+Please add or update tests for any changed behaviour. CI runs the unit suite on
+Node 18, 20 and 22, and the e2e suite against NestJS 10 and 11.
+
+A few suites exist specifically to hold an invariant rather than a single case,
+so prefer extending them over duplicating their intent:
+
+- `test/ScannerParity.test.ts` — incremental and full scanning must agree exactly
+- `test/e2e/module.e2e.test.ts` — the mock must answer on every documented path
+- `test/e2e/cli.e2e.test.ts` — `--fail-on-breaking` must exit non-zero
 
 ---
 
@@ -68,7 +84,7 @@ All tests live in `test/`. Please add or update tests for any changed behaviour.
    git checkout -b feat/my-feature
    ```
 2. Make your changes and add tests.
-3. Run `npm run build && npm test` — both must pass.
+3. Run `npm run lint && npm run build && npm test && npm run test:e2e` — all must pass.
 4. Push and open a PR against `master`.
 5. Fill in the PR template completely.
 

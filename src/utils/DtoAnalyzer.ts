@@ -1,5 +1,6 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
-import { ClassDeclaration, InterfaceDeclaration, Node, Type } from 'ts-morph';
+import { ClassDeclaration, InterfaceDeclaration, Node, PropertyDeclaration, Type } from 'ts-morph';
+import { extractValidationConstraints, ValidationConstraints } from './ValidationExtractor';
 
 export interface AnalyzedType {
   type: string;
@@ -14,6 +15,8 @@ export interface PropertyInfo {
   name: string;
   type: AnalyzedType;
   description?: string;
+  /** Constraints recovered from `class-validator` decorators, when present. */
+  validation?: ValidationConstraints;
 }
 
 export class DtoAnalyzer {
@@ -87,6 +90,16 @@ export class DtoAnalyzer {
       // Check if it's a union type
       const unionTypes = type.getUnionTypes();
       if (unionTypes.length > 1) {
+        // `prop?: AddressDto` widens to `AddressDto | undefined`. Without
+        // stripping the nullish members the DTO name is lost, which produced
+        // `oneOf` noise in the OpenAPI schema and untyped client properties.
+        const meaningful = unionTypes.filter(t => !t.isUndefined() && !t.isNull());
+
+        if (meaningful.length === 1) {
+          this.visited.delete(typeText);
+          return this.analyzeType(meaningful[0], true);
+        }
+
         // Check if it's a string literal union (acts like an enum)
         const literalValues: string[] = [];
         let allLiterals = true;
@@ -153,8 +166,26 @@ export class DtoAnalyzer {
     for (const prop of propDeclarations) {
       const name = prop.getName();
       const type = prop.getType();
-      const isOptional = prop.hasQuestionToken ? prop.hasQuestionToken() : false;
+
+      // Interface members have no decorators; only class properties do.
+      const validation = Node.isPropertyDeclaration(prop)
+        ? extractValidationConstraints(prop as PropertyDeclaration)
+        : undefined;
+
+      // `@IsOptional()` and `@IsNotEmpty()` override the `?` marker, because the
+      // validation pipe, not the TypeScript type, decides what the API accepts.
+      let isOptional = prop.hasQuestionToken ? prop.hasQuestionToken() : false;
+      if (validation?.explicitlyOptional) {
+        isOptional = true;
+      } else if (validation?.explicitlyRequired) {
+        isOptional = false;
+      }
+
       const analyzedType = this.analyzeType(type, isOptional);
+
+      // The union-stripping branch re-derives `isOptional`, so re-assert the
+      // decorator-driven decision afterwards.
+      analyzedType.isOptional = isOptional;
 
       // Extract JSDoc description
       const jsDocs = prop.getJsDocs();
@@ -170,6 +201,7 @@ export class DtoAnalyzer {
         name,
         type: analyzedType,
         description,
+        validation,
       });
     }
 

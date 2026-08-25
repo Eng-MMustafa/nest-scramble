@@ -2,13 +2,18 @@
 import { DynamicModule, MiddlewareConsumer, Module, OnModuleInit, RequestMethod, Inject } from '@nestjs/common';
 import { ConfigurableModuleClass, MODULE_OPTIONS_TOKEN } from './nest-scramble.module-definition';
 import { PostmanCollectionGenerator } from './generators/PostmanCollectionGenerator';
-import { MockMiddleware } from './middleware/MockMiddleware';
+import { MOCK_GLOBAL_PREFIX, MockMiddleware } from './middleware/MockMiddleware';
 import { ScannerService } from './scanner/ScannerService';
 import { IncrementalScannerService } from './scanner/IncrementalScannerService';
 import { MockGenerator } from './utils/MockGenerator';
 import { OpenApiTransformer } from './utils/OpenApiTransformer';
-import { DocsController } from './controllers/DocsController';
+import { createDocsController, normalizeDocsPath } from './controllers/DocsController';
 import { AutoDetector } from './utils/AutoDetector';
+import { buildWildcardRoute } from './utils/NestCompat';
+import { LogLevel, ScrambleLogger } from './utils/ScrambleLogger';
+import * as fs from 'fs';
+
+export const MOCK_ROUTE_PREFIX = 'scramble-mock';
 
 export interface NestScrambleOptions {
   path?: string;
@@ -26,17 +31,59 @@ export interface NestScrambleOptions {
   cacheFilePath?: string;
   hashAlgorithm?: 'md5' | 'sha256';
   cacheTtl?: number;
+  /**
+   * @deprecated Not implemented by the module and ignored. Watch mode works,
+   * but only through the programmatic `WatchModeService`, which regenerates
+   * artefacts outside the request lifecycle. Setting this here has no effect.
+   * @see WatchModeService
+   */
   enableWatchMode?: boolean;
+  /**
+   * @deprecated Not implemented by the module and ignored. Pass `debounceMs`
+   * to `WatchModeService` instead.
+   * @see WatchModeService
+   */
   watchDebounce?: number;
   skipDependencyTracking?: boolean;
+  /**
+   * @deprecated Not implemented and ignored. Choose the hash strength with
+   * `hashAlgorithm: 'sha256'` instead.
+   */
   enableHashCollisionDetection?: boolean;
+  /**
+   * @deprecated Not implemented and ignored. The generated document contains
+   * no `securitySchemes`, so there is nothing for this to apply to.
+   */
   defaultAuthType?: 'bearer' | 'apiKey' | 'none';
+  /**
+   * @deprecated Not implemented and ignored. To version the documented paths,
+   * pass the prefix you gave `app.setGlobalPrefix()` via `globalPrefix`.
+   */
   enableApiVersioning?: boolean;
+  /**
+   * Full URL of the Scalar standalone bundle. Override to self-host the asset
+   * instead of loading it from the public CDN (required in air-gapped setups).
+   */
+  scalarUrl?: string;
+  /**
+   * Controls library output. Use `'silent'` to suppress it entirely.
+   * @default 'info'
+   */
+  logLevel?: LogLevel;
+  /**
+   * Mirrors the value passed to `app.setGlobalPrefix()`.
+   *
+   * Static analysis cannot see the `bootstrap()` call, so without this every
+   * generated path is missing the prefix and does not match the running API.
+   */
+  globalPrefix?: string;
 }
 
 @Module({})
 export class NestScrambleModule extends ConfigurableModuleClass implements OnModuleInit {
   private static moduleOptions: NestScrambleOptions = {};
+  private static docsPath = 'docs';
+  private static controllerCount = 0;
 
   constructor(
     @Inject(MODULE_OPTIONS_TOKEN)
@@ -51,9 +98,11 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
   }
 
   private displayDashboard() {
+    if (!ScrambleLogger.isEnabled('info')) return;
+
     const options = NestScrambleModule.moduleOptions;
-    const projectStructure = AutoDetector.detectProjectStructure();
     const baseUrl = options.baseUrl;
+    const docsPath = NestScrambleModule.docsPath;
 
     const cyan = '\x1b[36m';
     const purple = '\x1b[35m';
@@ -64,28 +113,58 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
     const dim = '\x1b[2m';
     const gradient = `${cyan}${bold}`;
 
-    console.log('\n');
-    console.log(`${gradient}╔═══════════════════════════════════════════════════════════════╗${reset}`);
-    console.log(`${gradient}║${reset}  ${cyan}${bold}✨ NEST-SCRAMBLE${reset} ${dim}by Mohamed Mustafa${reset}                      ${gradient}║${reset}`);
-    console.log(`${gradient}║${reset}  ${purple}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${reset}  ${gradient}║${reset}`);
-    console.log(`${gradient}║${reset}                                                               ${gradient}║${reset}`);
-    console.log(`${gradient}║${reset}  ${green}●${reset} ${bold}Documentation${reset}                                           ${gradient}║${reset}`);
-    console.log(`${gradient}║${reset}    ${cyan}→${reset} ${baseUrl}${options.path || '/docs'}                            ${gradient}║${reset}`);
-    console.log(`${gradient}║${reset}                                                               ${gradient}║${reset}`);
-    console.log(`${gradient}║${reset}  ${green}●${reset} ${bold}OpenAPI Spec${reset}                                            ${gradient}║${reset}`);
-    console.log(`${gradient}║${reset}    ${cyan}→${reset} ${baseUrl}${options.path || '/docs'}-json                       ${gradient}║${reset}`);
+    const lines: string[] = [];
+    const rule = '─'.repeat(59);
+
+    lines.push('');
+    lines.push(`${gradient}┌${rule}┐${reset}`);
+    lines.push(`${gradient}│${reset} ${cyan}${bold}✨ NEST-SCRAMBLE${reset} ${dim}by Mohamed Mustafa${reset}`);
+    lines.push(`${gradient}│${reset}`);
+    lines.push(`${gradient}│${reset} ${green}●${reset} ${bold}Documentation${reset}  ${cyan}${baseUrl}/${docsPath}${reset}`);
+    lines.push(`${gradient}│${reset} ${green}●${reset} ${bold}OpenAPI Spec${reset}   ${cyan}${baseUrl}/${docsPath}-json${reset}`);
     if (options.enableMock !== false) {
-      console.log(`${gradient}║${reset}                                                               ${gradient}║${reset}`);
-      console.log(`${gradient}║${reset}  ${green}●${reset} ${bold}Mock Server${reset}                                             ${gradient}║${reset}`);
-      console.log(`${gradient}║${reset}    ${cyan}→${reset} ${baseUrl}/scramble-mock                  ${gradient}║${reset}`);
+      lines.push(
+        `${gradient}│${reset} ${green}●${reset} ${bold}Mock Server${reset}    ${cyan}${baseUrl}/${MOCK_ROUTE_PREFIX}${reset}`,
+      );
     }
-    console.log(`${gradient}║${reset}                                                               ${gradient}║${reset}`);
-    console.log(`${gradient}║${reset}  ${purple}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${reset}  ${gradient}║${reset}`);
-    console.log(`${gradient}║${reset}  ${yellow}📦${reset} Source Path: ${dim}${projectStructure.sourcePath}${reset}                     ${gradient}║${reset}`);
-    console.log(`${gradient}║${reset}  ${yellow}🎯${reset} Controllers: ${green}${bold}${projectStructure.controllerPaths.length}${reset}                                      ${gradient}║${reset}`);
-    console.log(`${gradient}║${reset}  ${yellow}🎨${reset} Theme: ${options.theme === 'futuristic' ? `${purple}${bold}Futuristic${reset}` : `${dim}Classic${reset}`}                                   ${gradient}║${reset}`);
-    console.log(`${gradient}╚═══════════════════════════════════════════════════════════════╝${reset}`);
-    console.log(`\n  ${dim}Press Ctrl+C to stop the server${reset}\n`);
+    lines.push(`${gradient}│${reset}`);
+    lines.push(`${gradient}│${reset} ${yellow}📦${reset} Source      ${dim}${options.sourcePath}${reset}`);
+    lines.push(
+      `${gradient}│${reset} ${yellow}🎯${reset} Controllers ${green}${bold}${NestScrambleModule.controllerCount}${reset}`,
+    );
+    lines.push(
+      `${gradient}│${reset} ${yellow}🎨${reset} Theme       ${options.theme === 'classic' ? `${dim}Classic${reset}` : `${purple}${bold}Futuristic${reset}`}`,
+    );
+    lines.push(`${gradient}└${rule}┘${reset}`);
+    lines.push('');
+
+    ScrambleLogger.raw(lines);
+  }
+
+  /**
+   * Options the module still accepts for backwards compatibility but does not
+   * act on. Kept as one list so the type, the warning and the test that guards
+   * against new dead options cannot drift apart.
+   */
+  static readonly IGNORED_OPTIONS: ReadonlyMap<keyof NestScrambleOptions, string> = new Map([
+    ['enableWatchMode', 'use the programmatic WatchModeService instead'],
+    ['watchDebounce', 'pass debounceMs to WatchModeService instead'],
+    ['enableHashCollisionDetection', "use hashAlgorithm: 'sha256' instead"],
+    ['defaultAuthType', 'the generated document declares no security schemes'],
+    ['enableApiVersioning', 'pass your app prefix via globalPrefix instead'],
+  ]);
+
+  /**
+   * An option that is accepted, type-checked and then ignored is worse than one
+   * that does not exist: the caller sees no effect and has no way to find out
+   * why. Saying so out loud costs one line at startup.
+   */
+  private static warnAboutIgnoredOptions(options: NestScrambleOptions): void {
+    for (const [option, advice] of NestScrambleModule.IGNORED_OPTIONS) {
+      if (options[option] !== undefined) {
+        ScrambleLogger.warn(`Option "${String(option)}" is not implemented and is ignored — ${advice}.`);
+      }
+    }
   }
 
   static forRoot(options: NestScrambleOptions = {}): DynamicModule {
@@ -112,25 +191,26 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
       watchDebounce: options.watchDebounce || 300,
       skipDependencyTracking: options.skipDependencyTracking || false,
       enableHashCollisionDetection: options.enableHashCollisionDetection !== false,
+      scalarUrl: options.scalarUrl,
+      logLevel: options.logLevel || 'info',
+      globalPrefix: options.globalPrefix || '',
     };
 
-    NestScrambleModule.moduleOptions = config;
+    ScrambleLogger.configure(config.logLevel);
+    NestScrambleModule.warnAboutIgnoredOptions(options);
 
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`🚀 [Nest-Scramble] Zero-Config Auto-Detection Engine`);
-    console.log(`   Developed by Mohamed Mustafa | MIT License`);
-    console.log(`   NestJS 10 & 11 | Node.js 18.10+ | TypeScript 5+`);
-    console.log(`${'='.repeat(60)}`);
-    console.log(`\n[Nest-Scramble] 🔍 Auto-detected project structure:`);
-    console.log(`   Root: ${projectStructure.rootPath}`);
-    console.log(`   Source: ${config.sourcePath}`);
-    console.log(`   Config: ${projectStructure.tsConfigPath}`);
+    NestScrambleModule.moduleOptions = config;
+    NestScrambleModule.docsPath = normalizeDocsPath(config.path);
+
+    ScrambleLogger.debug(`Project root: ${projectStructure.rootPath}`);
+    ScrambleLogger.debug(`Source path: ${config.sourcePath}`);
+    ScrambleLogger.debug(`tsconfig: ${projectStructure.tsConfigPath}`);
 
     let scanner: ScannerService | IncrementalScannerService;
     let controllers: any[];
-    
+
     if (config.useIncrementalScanning) {
-      console.log(`[Nest-Scramble] 🚀 Using Incremental Scanner with caching...`);
+      ScrambleLogger.debug('Using incremental scanner with caching');
       scanner = new IncrementalScannerService({
         useCache: true,
         cacheFilePath: config.cacheFilePath,
@@ -143,29 +223,37 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
       controllers = (scanner as IncrementalScannerService).scanControllers(config.sourcePath);
       
       const cacheStats = (scanner as IncrementalScannerService).getCacheManager().getStats();
-      console.log(`[Nest-Scramble] 📊 Cache: ${cacheStats.controllerCount} controllers, ${cacheStats.hashAlgorithm} algorithm`);
+      ScrambleLogger.debug(
+        `Cache: ${cacheStats.controllerCount} controllers, ${cacheStats.hashAlgorithm} algorithm`,
+      );
     } else {
-      console.log(`[Nest-Scramble] 📦 Using Traditional Scanner...`);
       scanner = new ScannerService();
       controllers = scanner.scanControllers(config.sourcePath);
     }
-    
-    console.log(`\n[Nest-Scramble] 📦 Generating OpenAPI specification...`);
-    const transformer = new OpenApiTransformer(config.baseUrl);
+
+    NestScrambleModule.controllerCount = controllers.length;
+
+    if (controllers.length === 0) {
+      ScrambleLogger.warn(
+        `No controllers found in "${config.sourcePath}". ` +
+          'Check the `sourcePath` option points at the directory containing your @Controller() classes.',
+      );
+    }
+
+    const transformer = new OpenApiTransformer(config.baseUrl, config.globalPrefix);
     const openApiSpec = transformer.transform(
       controllers,
       config.apiTitle,
       config.apiVersion,
       config.baseUrl
     );
-    console.log(`[Nest-Scramble] ✅ OpenAPI spec generated successfully`);
+    ScrambleLogger.debug('OpenAPI specification generated');
 
     if (config.autoExportPostman) {
-      console.log(`[Nest-Scramble] 📤 Exporting Postman collection...`);
       const generator = new PostmanCollectionGenerator(config.baseUrl);
       const collection = generator.generateCollection(controllers);
-      require('fs').writeFileSync(config.postmanOutputPath, JSON.stringify(collection, null, 2));
-      console.log(`[Nest-Scramble] ✓ Postman collection exported to ${config.postmanOutputPath}`);
+      fs.writeFileSync(config.postmanOutputPath, JSON.stringify(collection, null, 2));
+      ScrambleLogger.info(`Postman collection exported to ${config.postmanOutputPath}`);
     }
 
     // Get the base module from ConfigurableModuleBuilder
@@ -186,6 +274,11 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
           useValue: controllers,
         },
         {
+          // The mock must answer on the same paths the document advertises.
+          provide: MOCK_GLOBAL_PREFIX,
+          useValue: config.globalPrefix,
+        },
+        {
           provide: 'NEST_SCRAMBLE_OPENAPI',
           useValue: openApiSpec,
         },
@@ -201,13 +294,19 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
         PostmanCollectionGenerator,
         OpenApiTransformer,
       ],
-      controllers: [DocsController],
+      controllers: [createDocsController({ path: config.path })],
     };
   }
 
   configure(consumer: MiddlewareConsumer) {
+    if (NestScrambleModule.moduleOptions.enableMock === false) {
+      return;
+    }
+
+    // The route pattern differs between Express 4 (NestJS 10) and Express 5
+    // (NestJS 11), where anonymous `*` wildcards are rejected outright.
     consumer
       .apply(MockMiddleware)
-      .forRoutes({ path: 'scramble-mock/*', method: RequestMethod.ALL });
+      .forRoutes({ path: buildWildcardRoute(MOCK_ROUTE_PREFIX), method: RequestMethod.ALL });
   }
 }

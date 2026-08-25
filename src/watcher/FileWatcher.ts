@@ -1,7 +1,8 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
-import * as chokidar from 'chokidar';
+import type * as chokidar from 'chokidar';
 import * as path from 'path';
 import { CacheManager } from '../cache/CacheManager';
+import { ScrambleLogger } from '../utils/ScrambleLogger';
 
 export interface FileChangeEvent {
   type: 'add' | 'change' | 'unlink';
@@ -24,6 +25,26 @@ export class FileWatcher {
   private debounceTimer: NodeJS.Timeout | null = null;
   private isWatching = false;
 
+  /**
+   * Loads chokidar on demand.
+   *
+   * chokidar is an optional peer dependency: it is only needed for watch mode.
+   * Requiring it lazily keeps `import 'nest-scramble'` working in production
+   * installs (`npm ci --omit=dev`) where chokidar is not present.
+   */
+  private static loadChokidar(): typeof chokidar {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      return require('chokidar');
+    } catch {
+      throw new Error(
+        '[Nest-Scramble] Watch mode requires the optional peer dependency "chokidar".\n' +
+          '  Install it with: npm install chokidar\n' +
+          '  Or disable watch mode to avoid this dependency.',
+      );
+    }
+  }
+
   constructor(options: WatcherOptions) {
     this.options = {
       ...options,
@@ -44,15 +65,17 @@ export class FileWatcher {
    */
   start(): void {
     if (this.isWatching) {
-      console.log('[FileWatcher] Already watching');
+      ScrambleLogger.info('[FileWatcher] Already watching');
       return;
     }
 
     const watchPattern = path.join(this.options.sourcePath, '**/*.ts');
     
-    console.log(`[FileWatcher] Starting file watcher on: ${watchPattern}`);
-    
-    this.watcher = chokidar.watch(watchPattern, {
+    ScrambleLogger.info(`[FileWatcher] Starting file watcher on: ${watchPattern}`);
+
+    const chokidarModule = FileWatcher.loadChokidar();
+
+    this.watcher = chokidarModule.watch(watchPattern, {
       ignored: this.options.ignored,
       persistent: true,
       ignoreInitial: true,
@@ -66,10 +89,10 @@ export class FileWatcher {
       .on('add', (filePath) => this.handleFileEvent('add', filePath))
       .on('change', (filePath) => this.handleFileEvent('change', filePath))
       .on('unlink', (filePath) => this.handleFileEvent('unlink', filePath))
-      .on('error', (error) => console.error('[FileWatcher] Error:', error))
+      .on('error', (error) => ScrambleLogger.error('[FileWatcher] Error:', error))
       .on('ready', () => {
         this.isWatching = true;
-        console.log('[FileWatcher] Ready and watching for changes');
+        ScrambleLogger.info('[FileWatcher] Ready and watching for changes');
       });
   }
 
@@ -81,7 +104,7 @@ export class FileWatcher {
       return;
     }
 
-    console.log('[FileWatcher] Stopping file watcher');
+    ScrambleLogger.info('[FileWatcher] Stopping file watcher');
     
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
@@ -107,7 +130,7 @@ export class FileWatcher {
       
       // Skip if hash hasn't changed
       if (type === 'change' && !this.options.cacheManager.hasFileChanged(normalizedPath, hash)) {
-        console.log(`[FileWatcher] No content change detected for: ${normalizedPath}`);
+        ScrambleLogger.info(`[FileWatcher] No content change detected for: ${normalizedPath}`);
         return;
       }
     }
@@ -120,7 +143,7 @@ export class FileWatcher {
 
     this.pendingChanges.set(normalizedPath, event);
     
-    console.log(`[FileWatcher] File ${type}: ${normalizedPath}`);
+    ScrambleLogger.info(`[FileWatcher] File ${type}: ${normalizedPath}`);
     
     this.scheduleProcessing();
   }
@@ -149,13 +172,13 @@ export class FileWatcher {
     const events = Array.from(this.pendingChanges.values());
     this.pendingChanges.clear();
 
-    console.log(`[FileWatcher] Processing ${events.length} file change(s)`);
+    ScrambleLogger.info(`[FileWatcher] Processing ${events.length} file change(s)`);
 
     if (this.options.onFileChange) {
       try {
         await this.options.onFileChange(events);
       } catch (error) {
-        console.error('[FileWatcher] Error in file change handler:', error);
+        ScrambleLogger.error('[FileWatcher] Error in file change handler:', error);
       }
     }
   }

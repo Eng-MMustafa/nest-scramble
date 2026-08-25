@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { ControllerInfo } from '../scanner/ScannerService';
+import { ScrambleLogger } from '../utils/ScrambleLogger';
 
 export interface CacheMetadata {
   version: string;
@@ -16,7 +17,13 @@ export interface CachedController {
   filePath: string;
   fileHash: string;
   fileSize: number;
-  controllerInfo: ControllerInfo;
+  /**
+   * Every controller declared in the file.
+   *
+   * This was a single `controllerInfo`, so any file declaring more than one
+   * `@Controller()` class silently lost all but the first from the cache.
+   */
+  controllerInfos: ControllerInfo[];
   dependencies: string[];
   lastScanned: number;
 }
@@ -28,8 +35,26 @@ export interface CacheOptions {
   hashAlgorithm?: 'md5' | 'sha256';
 }
 
+/**
+ * Resolves the installed library version so a package upgrade always invalidates
+ * the cache.
+ *
+ * The cache version used to be a hand-maintained constant unrelated to the
+ * library, so upgrading nest-scramble kept reusing entries produced by the older
+ * analyser. Anything the new version learned to extract was silently missing
+ * until the user deleted the cache file by hand.
+ */
+function resolveLibraryVersion(): string {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require('../../package.json').version ?? 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 export class CacheManager {
-  private static readonly CACHE_VERSION = '1.0.0';
+  private static readonly CACHE_VERSION = resolveLibraryVersion();
   private static readonly DEFAULT_CACHE_FILE = 'scramble-cache.json';
   
   private cacheFilePath: string;
@@ -59,13 +84,13 @@ export class CacheManager {
    */
   load(): boolean {
     if (!this.enabled) {
-      console.log('[CacheManager] Cache is disabled');
+      ScrambleLogger.info('[CacheManager] Cache is disabled');
       return false;
     }
 
     try {
       if (!fs.existsSync(this.cacheFilePath)) {
-        console.log('[CacheManager] No cache file found, starting fresh');
+        ScrambleLogger.info('[CacheManager] No cache file found, starting fresh');
         return false;
       }
 
@@ -74,14 +99,14 @@ export class CacheManager {
 
       // Version check
       if (parsed.version !== CacheManager.CACHE_VERSION) {
-        console.log('[CacheManager] Cache version mismatch, invalidating cache');
+        ScrambleLogger.info('[CacheManager] Cache version mismatch, invalidating cache');
         return false;
       }
 
       // TTL check
       const age = Date.now() - parsed.timestamp;
       if (age > this.ttl) {
-        console.log('[CacheManager] Cache expired, invalidating');
+        ScrambleLogger.info('[CacheManager] Cache expired, invalidating');
         return false;
       }
 
@@ -99,10 +124,10 @@ export class CacheManager {
         ),
       };
 
-      console.log(`[CacheManager] Loaded cache with ${this.metadata.controllers.size} controller(s)`);
+      ScrambleLogger.info(`[CacheManager] Loaded cache with ${this.metadata.controllers.size} controller(s)`);
       return true;
     } catch (error) {
-      console.error('[CacheManager] Error loading cache:', error);
+      ScrambleLogger.error('[CacheManager] Error loading cache:', error);
       return false;
     }
   }
@@ -136,10 +161,10 @@ export class CacheManager {
         'utf-8'
       );
 
-      console.log(`[CacheManager] Cache saved to ${this.cacheFilePath}`);
+      ScrambleLogger.info(`[CacheManager] Cache saved to ${this.cacheFilePath}`);
       return true;
     } catch (error) {
-      console.error('[CacheManager] Error saving cache:', error);
+      ScrambleLogger.error('[CacheManager] Error saving cache:', error);
       return false;
     }
   }
@@ -227,8 +252,8 @@ export class CacheManager {
     try {
       const currentSize = fs.statSync(filePath).size;
       if (cached.fileSize !== currentSize) {
-        console.warn(`[CacheManager] Hash collision detected for ${filePath}`);
-        console.warn(`[CacheManager] Hash: ${currentHash}, but size differs: ${cached.fileSize} vs ${currentSize}`);
+        ScrambleLogger.warn(`[CacheManager] Hash collision detected for ${filePath}`);
+        ScrambleLogger.warn(`[CacheManager] Hash: ${currentHash}, but size differs: ${cached.fileSize} vs ${currentSize}`);
         this.trackHashCollision(currentHash);
         return true;
       }
@@ -248,8 +273,8 @@ export class CacheManager {
     this.hashCollisions.set(hash, count + 1);
     
     if (count >= 3) {
-      console.error(`[CacheManager] ⚠️  Multiple hash collisions detected (${count + 1}x) for hash: ${hash}`);
-      console.error(`[CacheManager] Consider switching to SHA-256 for better collision resistance`);
+      ScrambleLogger.error(`[CacheManager] ⚠️  Multiple hash collisions detected (${count + 1}x) for hash: ${hash}`);
+      ScrambleLogger.error(`[CacheManager] Consider switching to SHA-256 for better collision resistance`);
     }
   }
 
@@ -261,7 +286,7 @@ export class CacheManager {
       const content = fs.readFileSync(filePath, 'utf-8');
       return crypto.createHash(algorithm).update(content).digest('hex');
     } catch (error) {
-      console.error(`[CacheManager] Error calculating hash for ${filePath}:`, error);
+      ScrambleLogger.error(`[CacheManager] Error calculating hash for ${filePath}:`, error);
       return '';
     }
   }
@@ -322,9 +347,9 @@ export class CacheManager {
     if (fs.existsSync(this.cacheFilePath)) {
       try {
         fs.unlinkSync(this.cacheFilePath);
-        console.log('[CacheManager] Cache invalidated and file removed');
+        ScrambleLogger.info('[CacheManager] Cache invalidated and file removed');
       } catch (error) {
-        console.error('[CacheManager] Error removing cache file:', error);
+        ScrambleLogger.error('[CacheManager] Error removing cache file:', error);
       }
     }
   }
@@ -371,7 +396,7 @@ export class CacheManager {
     }
     
     if (removed > 0) {
-      console.log(`[CacheManager] Cleaned up ${removed} stale cache entries`);
+      ScrambleLogger.info(`[CacheManager] Cleaned up ${removed} stale cache entries`);
     }
     
     return removed;

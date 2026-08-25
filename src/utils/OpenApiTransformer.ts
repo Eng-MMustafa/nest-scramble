@@ -1,6 +1,11 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
 import { ControllerInfo, MethodInfo } from '../scanner/ScannerService';
 import { AnalyzedType } from './DtoAnalyzer';
+import { ValidationConstraints } from './ValidationExtractor';
+import { buildRouteSegments, toOpenApiPath } from './RoutePath';
+
+/** Verbs that `@All()` expands to in the generated document. */
+const ALL_METHOD_VERBS = ['get', 'post', 'put', 'patch', 'delete'];
 
 interface OpenApiSpec {
   openapi: string;
@@ -26,9 +31,16 @@ interface OpenApiSpec {
 export class OpenApiTransformer {
   private schemas: Record<string, any> = {};
   private baseUrl: string;
+  private globalPrefix: string;
 
-  constructor(baseUrl = 'http://localhost:3000') {
+  /**
+   * @param baseUrl Server URL advertised in the document
+   * @param globalPrefix Value passed to `app.setGlobalPrefix()`. Without it every
+   *   generated path is wrong for applications that use a prefix.
+   */
+  constructor(baseUrl = 'http://localhost:3000', globalPrefix = '') {
     this.baseUrl = baseUrl;
+    this.globalPrefix = globalPrefix.replace(/^\/+|\/+$/g, '');
   }
 
   /**
@@ -59,7 +71,18 @@ export class OpenApiTransformer {
           paths[fullPath] = {};
         }
 
-        paths[fullPath][method.httpMethod.toLowerCase()] = operation;
+        const verb = method.httpMethod.toLowerCase();
+
+        if (verb === 'all') {
+          // OpenAPI has no "any method" verb, so expand it.
+          for (const expanded of ALL_METHOD_VERBS) {
+            if (!paths[fullPath][expanded]) {
+              paths[fullPath][expanded] = operation;
+            }
+          }
+        } else {
+          paths[fullPath][verb] = operation;
+        }
       }
     }
 
@@ -98,20 +121,14 @@ export class OpenApiTransformer {
   }
 
   private buildPath(controllerPath: string, methodRoute: string, version?: string | string[]): string {
-    const parts: string[] = [];
-    
-    if (version) {
-      const versionStr = Array.isArray(version) ? version[0] : version;
-      parts.push(`v${versionStr}`);
-    }
-    
-    if (controllerPath) parts.push(controllerPath);
-    if (methodRoute) parts.push(methodRoute);
-
-    const normalizedPath = '/' + parts.join('/').replace(/\/+/g, '/');
-
-    // OpenAPI path params use {id} syntax, while Nest routes commonly use :id.
-    return normalizedPath.replace(/:([A-Za-z0-9_]+)/g, '{$1}');
+    return toOpenApiPath(
+      buildRouteSegments({
+        globalPrefix: this.globalPrefix,
+        version,
+        controllerPath,
+        methodRoute,
+      }),
+    );
   }
 
   private requiresAuthentication(method: MethodInfo, controller: ControllerInfo): boolean {
@@ -151,21 +168,30 @@ export class OpenApiTransformer {
   }
 
   private createOperation(method: MethodInfo, controller: ControllerInfo, requiresAuth: boolean, guardTypes: string[]): any {
-    const successStatusCode = this.getSuccessStatusCode(method.httpMethod);
+    // An explicit `@HttpCode()` is authoritative; otherwise fall back to the
+    // convention NestJS itself applies.
+    const successStatusCode =
+      method.httpCode !== undefined
+        ? String(method.httpCode)
+        : this.getSuccessStatusCode(method.httpMethod);
     const successDescription = this.getSuccessDescription(method.httpMethod);
+    const isEmptyResponse = successStatusCode === '204';
 
     const operation: any = {
-      summary: method.name,
+      operationId: `${controller.name}_${method.name}`,
+      summary: method.summary || method.name,
       tags: [this.getControllerTagName(controller)],
       responses: {
-        [successStatusCode]: {
-          description: successDescription,
-          content: {
-            'application/json': {
-              schema: this.analyzedTypeToSchema(method.returnType),
+        [successStatusCode]: isEmptyResponse
+          ? { description: successDescription }
+          : {
+              description: successDescription,
+              content: {
+                'application/json': {
+                  schema: this.analyzedTypeToSchema(method.returnType),
+                },
+              },
             },
-          },
-        },
         '400': {
           description: 'Bad Request',
           content: {
@@ -198,9 +224,18 @@ export class OpenApiTransformer {
       },
     };
 
+    const hasFileFields = (method.fileFields?.length ?? 0) > 0;
+
     const parameters: any[] = [];
     for (const param of method.parameters) {
-      if (param.parameterLocation === 'body') {
+      if (param.parameterLocation === 'file') {
+        // Described by the multipart body below, not as a parameter.
+        continue;
+      } else if (param.parameterLocation === 'body') {
+        // On an upload route the body fields travel as sibling form fields, so
+        // they belong in the multipart schema rather than a JSON body.
+        if (hasFileFields) continue;
+
         operation.requestBody = {
           required: true,
           content: {
@@ -215,7 +250,7 @@ export class OpenApiTransformer {
             parameters.push({
               name: prop.name,
               in: 'query',
-              schema: this.analyzedTypeToSchema(prop.type),
+              schema: this.applyValidation(this.analyzedTypeToSchema(prop.type), prop.validation),
               required: !prop.type.isOptional,
               description: prop.description,
             });
@@ -243,6 +278,10 @@ export class OpenApiTransformer {
           required: !param.type.isOptional,
         });
       }
+    }
+
+    if (hasFileFields) {
+      operation.requestBody = this.buildMultipartRequestBody(method);
     }
 
     if (parameters.length > 0) {
@@ -273,9 +312,111 @@ export class OpenApiTransformer {
       };
     }
 
+    if (method.description) {
+      operation.description = method.description;
+    }
+
+    if (method.deprecated) {
+      operation.deprecated = true;
+    }
+
     operation['x-code-samples'] = this.generateCodeSamples(method);
 
     return operation;
+  }
+
+  /**
+   * Builds a `multipart/form-data` request body for an upload route.
+   *
+   * File fields and any `@Body()` properties are siblings in a multipart
+   * payload, so they are merged into one schema. Previously the upload parameter
+   * matched no branch at all and the endpoint was documented with no body,
+   * making it impossible to call from the docs UI.
+   */
+  private buildMultipartRequestBody(method: MethodInfo): any {
+    const properties: Record<string, any> = {};
+    const required: string[] = [];
+
+    for (const field of method.fileFields ?? []) {
+      // `string`/`binary` is how OpenAPI 3.0 describes an uploaded file.
+      const fileSchema = { type: 'string', format: 'binary' };
+
+      properties[field.name] = field.multiple
+        ? {
+            type: 'array',
+            items: fileSchema,
+            ...(field.maxCount !== undefined ? { maxItems: field.maxCount } : {}),
+          }
+        : fileSchema;
+
+      required.push(field.name);
+    }
+
+    const bodyParam = method.parameters.find(p => p.parameterLocation === 'body');
+
+    for (const prop of bodyParam?.type.properties ?? []) {
+      properties[prop.name] = this.applyValidation(
+        this.analyzedTypeToSchema(prop.type),
+        prop.validation,
+      );
+
+      if (prop.description) {
+        properties[prop.name].description = prop.description;
+      }
+
+      if (!prop.type.isOptional) {
+        required.push(prop.name);
+      }
+    }
+
+    return {
+      required: true,
+      content: {
+        'multipart/form-data': {
+          schema: {
+            type: 'object',
+            properties,
+            ...(required.length > 0 ? { required } : {}),
+          },
+        },
+      },
+    };
+  }
+
+  /**
+   * Merges `class-validator` constraints into a property schema.
+   *
+   * These constraints are the actual API contract enforced by the validation
+   * pipe, so omitting them produced specs that under-described the API.
+   */
+  private applyValidation(schema: any, validation: ValidationConstraints | undefined): any {
+    if (!validation) return schema;
+
+    // A `$ref` cannot carry sibling keywords in OpenAPI 3.0.
+    if (schema.$ref) return schema;
+
+    const target = schema.type === 'array' ? schema.items : schema;
+
+    if (validation.format !== undefined) target.format = validation.format;
+    if (validation.minLength !== undefined) target.minLength = validation.minLength;
+    if (validation.maxLength !== undefined) target.maxLength = validation.maxLength;
+    if (validation.pattern !== undefined) target.pattern = validation.pattern;
+    if (validation.minimum !== undefined) target.minimum = validation.minimum;
+    if (validation.maximum !== undefined) target.maximum = validation.maximum;
+    if (validation.exclusiveMinimum !== undefined) target.exclusiveMinimum = validation.exclusiveMinimum;
+    if (validation.exclusiveMaximum !== undefined) target.exclusiveMaximum = validation.exclusiveMaximum;
+    if (validation.multipleOf !== undefined) target.multipleOf = validation.multipleOf;
+    if (validation.enum !== undefined) target.enum = validation.enum;
+    if (validation.isInteger) target.type = 'integer';
+
+    // Array-level keywords belong on the array, not the item schema.
+    if (schema.type === 'array') {
+      if (validation.minItems !== undefined) schema.minItems = validation.minItems;
+      if (validation.maxItems !== undefined) schema.maxItems = validation.maxItems;
+      if (validation.uniqueItems) schema.uniqueItems = true;
+    }
+
+    return schema;
   }
 
   private getControllerTagName(controller: ControllerInfo): string {
@@ -342,8 +483,11 @@ export class OpenApiTransformer {
         const required: string[] = [];
 
         for (const prop of type.properties) {
-          const propSchema = this.analyzedTypeToSchema(prop.type);
-          
+          const propSchema = this.applyValidation(
+            this.analyzedTypeToSchema(prop.type),
+            prop.validation,
+          );
+
           // Add description from JSDoc if available
           if (prop.description) {
             propSchema.description = prop.description;
@@ -386,29 +530,68 @@ export class OpenApiTransformer {
     return this.typeStringToSchema(type.type);
   }
 
+  /**
+   * Builds the copy-paste samples shown in the docs UI.
+   *
+   * Every sample used to send a JSON body, even on a `GET` and even on an upload
+   * route. Copying either one produced a request that could not work, so the
+   * shape now follows what the endpoint actually accepts.
+   */
   private generateCodeSamples(method: MethodInfo): any[] {
-    const fullPath = this.buildPath('', method.route); // Assuming base path is handled elsewhere
-    const samples = [];
+    const fullPath = this.buildPath('', method.route);
+    const url = `${this.baseUrl}${fullPath}`;
+    const verb = method.httpMethod.toUpperCase();
 
-    // Curl sample
-    samples.push({
-      lang: 'curl',
-      source: `curl -X ${method.httpMethod} "${this.baseUrl}${fullPath}" \\\n  -H "Content-Type: application/json" \\\n  -d '{}'`,
-    });
+    const fileFields = method.fileFields ?? [];
+    const hasBody = method.parameters.some(p => p.parameterLocation === 'body');
+    const sendsJson = hasBody && fileFields.length === 0;
 
-    // JavaScript Fetch sample
-    samples.push({
-      lang: 'javascript',
-      source: `fetch('${this.baseUrl}${fullPath}', {\n  method: '${method.httpMethod}',\n  headers: {\n    'Content-Type': 'application/json',\n  },\n  body: JSON.stringify({}),\n})\n  .then(response => response.json())\n  .then(data => console.log(data));`,
-    });
+    if (fileFields.length > 0) {
+      const curlParts = fileFields
+        .map(field => `  -F "${field.name}=@/path/to/file"`)
+        .join(' \\\n');
 
-    // TypeScript sample
-    samples.push({
-      lang: 'typescript',
-      source: `// Assuming you have the DTO types\nimport axios from 'axios';\n\nconst response = await axios.${method.httpMethod.toLowerCase()}('${this.baseUrl}${fullPath}', {});\nconsole.log(response.data);`,
-    });
+      const formLines = fileFields
+        .map(field => `form.append('${field.name}', fileInput.files[0]);`)
+        .join('\n');
 
-    return samples;
+      return [
+        {
+          lang: 'curl',
+          source: `curl -X ${verb} "${url}" \\\n${curlParts}`,
+        },
+        {
+          lang: 'javascript',
+          // The Content-Type header is omitted on purpose: the browser adds it
+          // together with the multipart boundary.
+          source: `const form = new FormData();\n${formLines}\n\nfetch('${url}', {\n  method: '${verb}',\n  body: form,\n})\n  .then(response => response.json())\n  .then(data => console.log(data));`,
+        },
+      ];
+    }
+
+    if (!sendsJson) {
+      return [
+        {
+          lang: 'curl',
+          source: `curl -X ${verb} "${url}"`,
+        },
+        {
+          lang: 'javascript',
+          source: `fetch('${url}'${verb === 'GET' ? '' : `, { method: '${verb}' }`})\n  .then(response => response.json())\n  .then(data => console.log(data));`,
+        },
+      ];
+    }
+
+    return [
+      {
+        lang: 'curl',
+        source: `curl -X ${verb} "${url}" \\\n  -H "Content-Type: application/json" \\\n  -d '{}'`,
+      },
+      {
+        lang: 'javascript',
+        source: `fetch('${url}', {\n  method: '${verb}',\n  headers: {\n    'Content-Type': 'application/json',\n  },\n  body: JSON.stringify({}),\n})\n  .then(response => response.json())\n  .then(data => console.log(data));`,
+      },
+    ];
   }
 
   private generateSmartExample(propertyName: string, propertyType: string, enumValues?: string[]): any {

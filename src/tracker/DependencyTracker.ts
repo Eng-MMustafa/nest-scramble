@@ -1,5 +1,6 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
-import { Project, SourceFile, Node, ImportDeclaration } from 'ts-morph';
+import { Project, SourceFile, Node } from 'ts-morph';
+import { ScrambleLogger } from '../utils/ScrambleLogger';
 import * as path from 'path';
 
 export interface DependencyInfo {
@@ -178,7 +179,7 @@ export class DependencyTracker {
   private resolveImportPath(sourceFile: SourceFile, moduleSpecifier: string): string | null {
     try {
       const sourceDir = path.dirname(sourceFile.getFilePath());
-      let resolvedPath = path.resolve(sourceDir, moduleSpecifier);
+      const resolvedPath = path.resolve(sourceDir, moduleSpecifier);
       
       // Try different extensions
       const extensions = ['.ts', '.tsx', '/index.ts', '/index.tsx'];
@@ -216,7 +217,7 @@ export class DependencyTracker {
    * Build dependency graph for all controllers
    */
   buildGraph(controllerPaths: string[]): void {
-    console.log('[DependencyTracker] Building dependency graph...');
+    ScrambleLogger.info('[DependencyTracker] Building dependency graph...');
     
     this.dependencyGraph.clear();
     this.reverseDependencyGraph.clear();
@@ -235,7 +236,7 @@ export class DependencyTracker {
       }
     }
 
-    console.log(`[DependencyTracker] Graph built: ${this.dependencyGraph.size} controllers, ${this.reverseDependencyGraph.size} dependencies`);
+    ScrambleLogger.info(`[DependencyTracker] Graph built: ${this.dependencyGraph.size} controllers, ${this.reverseDependencyGraph.size} dependencies`);
   }
 
   /**

@@ -1,6 +1,7 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
 import { ControllerInfo, MethodInfo, ParameterInfo } from '../scanner/ScannerService';
-import { AnalyzedType } from '../utils/DtoAnalyzer';
+import { AnalyzedType, PropertyInfo } from '../utils/DtoAnalyzer';
+import { FileFieldInfo } from '../utils/FileUploadExtractor';
 
 /**
  * Generates a fully-typed TypeScript HTTP client from scanned NestJS controllers.
@@ -17,19 +18,43 @@ export class TypedClientGenerator {
     lines.push(`// Re-generate: npx nest-scramble generate src --format client`);
     lines.push('');
 
-    // Collect all DTO type names referenced in the scanned controllers so we can
-    // emit placeholder interfaces at the top of the file.  Users replace these with
-    // their real DTO imports; the generated code will still compile immediately.
-    const dtoNames = this.collectDtoNames(controllers);
-    if (dtoNames.size > 0) {
-      lines.push('// ─── DTO type stubs ──────────────────────────────────────────────────────────');
-      lines.push('// Replace these with your real DTO imports, e.g.:');
-      lines.push('//   import { UserDto } from \'./src/dto/user.dto\';');
-      lines.push('');
-      for (const name of Array.from(dtoNames).sort()) {
-        lines.push(`export interface ${name} { [key: string]: unknown; }`);
+    // Emit real interfaces reconstructed from the scanned DTO shapes, so the
+    // generated client is actually type safe. Emitting `{ [key: string]: unknown }`
+    // stubs would compile but silently accept any property.
+    const dtoShapes = this.collectDtoShapes(controllers);
+    const enums = this.collectEnums(controllers);
+
+    if (enums.size > 0) {
+      lines.push('// ─── Enums ───────────────────────────────────────────────────────────');
+      for (const [name, values] of Array.from(enums).sort((a, b) => a[0].localeCompare(b[0]))) {
+        const union = values.map(v => `'${v}'`).join(' | ');
+        lines.push(`export type ${name} = ${union};`);
       }
       lines.push('');
+    }
+
+    if (dtoShapes.size > 0) {
+      lines.push('// ─── Types ───────────────────────────────────────────────────────────');
+      const sorted = Array.from(dtoShapes.keys()).sort();
+      for (const name of sorted) {
+        const properties = dtoShapes.get(name)!;
+        if (properties.length === 0) {
+          // Shape could not be resolved from the AST (e.g. an external type).
+          lines.push(`export type ${name} = unknown;`);
+          continue;
+        }
+
+        lines.push(`export interface ${name} {`);
+        for (const prop of properties) {
+          if (prop.description) {
+            lines.push(`  /** ${prop.description} */`);
+          }
+          const optional = prop.type.isOptional ? '?' : '';
+          lines.push(`  ${prop.name}${optional}: ${this.toTsType(prop.type)};`);
+        }
+        lines.push('}');
+        lines.push('');
+      }
     }
 
     // One class per controller
@@ -73,8 +98,11 @@ export class TypedClientGenerator {
     const queryParams = method.parameters.filter(p => p.parameterLocation === 'query' || p.decorator === 'Query');
     const bodyParam = method.parameters.find(p => p.parameterLocation === 'body' || p.decorator === 'Body');
 
+    const fileFields = method.fileFields ?? [];
+    const isUpload = fileFields.length > 0;
+
     const returnTs = this.toTsType(method.returnType);
-    const fnParams = this.buildFnParams(pathParams, queryParams, bodyParam);
+    const fnParams = this.buildFnParams(pathParams, queryParams, bodyParam, fileFields);
     const fullRoute = this.joinPath(controllerPath, method.route);
 
     lines.push(`async ${method.name}(${fnParams}): Promise<${returnTs}> {`);
@@ -97,7 +125,32 @@ export class TypedClientGenerator {
 
     // Build fetch call
     const httpMethod = method.httpMethod.toUpperCase();
-    if (bodyParam) {
+    if (isUpload) {
+      // A multipart endpoint rejects a JSON body, so the request must be built
+      // as FormData. The Content-Type header is deliberately omitted: the
+      // browser adds it together with the required multipart boundary.
+      lines.push(`  const _form = new FormData();`);
+
+      for (const field of fileFields) {
+        const name = this.toIdentifier(field.name);
+        if (field.multiple) {
+          lines.push(`  for (const _f of ${name}) _form.append('${field.name}', _f);`);
+        } else {
+          lines.push(`  _form.append('${field.name}', ${name});`);
+        }
+      }
+
+      if (bodyParam) {
+        lines.push(`  for (const [_k, _v] of Object.entries(${bodyParam.name} ?? {})) {`);
+        lines.push(`    if (_v !== undefined) _form.append(_k, String(_v));`);
+        lines.push(`  }`);
+      }
+
+      lines.push(`  const _res = await fetch(${urlArg}, {`);
+      lines.push(`    method: '${httpMethod}',`);
+      lines.push(`    body: _form,`);
+      lines.push(`  });`);
+    } else if (bodyParam) {
       lines.push(`  const _res = await fetch(${urlArg}, {`);
       lines.push(`    method: '${httpMethod}',`);
       lines.push(`    headers: { 'Content-Type': 'application/json' },`);
@@ -123,15 +176,26 @@ export class TypedClientGenerator {
     return lines;
   }
 
+  /** Turns a form field name into a valid TypeScript parameter name. */
+  private toIdentifier(fieldName: string): string {
+    const cleaned = fieldName.replace(/[^A-Za-z0-9_$]/g, '_');
+    return /^[0-9]/.test(cleaned) ? `_${cleaned}` : cleaned;
+  }
+
   private buildFnParams(
     pathParams: ParameterInfo[],
     queryParams: ParameterInfo[],
     bodyParam: ParameterInfo | undefined,
+    fileFields: FileFieldInfo[] = [],
   ): string {
     const parts: string[] = [];
 
     for (const p of pathParams) {
       parts.push(`${p.name}: ${this.toTsType(p.type)}`);
+    }
+    // Files come before the optional metadata so the signature stays callable.
+    for (const field of fileFields) {
+      parts.push(`${this.toIdentifier(field.name)}: ${field.multiple ? 'File[]' : 'File'}`);
     }
     for (const p of queryParams) {
       const opt = p.type.isOptional ? '?' : '';
@@ -187,16 +251,28 @@ export class TypedClientGenerator {
   // Type helpers
   // ---------------------------------------------------------------------------
 
-  private collectDtoNames(controllers: ControllerInfo[]): Set<string> {
-    const names = new Set<string>();
-    const primitives = new Set(['string', 'number', 'boolean', 'any', 'void', 'unknown', 'object', 'never']);
+  /**
+   * Walks every scanned type and records the resolved property list for each
+   * named object type, so real interfaces can be emitted.
+   */
+  private collectDtoShapes(controllers: ControllerInfo[]): Map<string, PropertyInfo[]> {
+    const shapes = new Map<string, PropertyInfo[]>();
+    const seen = new Set<string>();
 
     const visit = (t: AnalyzedType) => {
       const base = t.type.replace(/\[\]$/, '');
-      if (!primitives.has(base) && /^[A-Z]/.test(base)) {
-        names.add(base);
+
+      if (this.isNamedType(base) && !t.enumValues) {
+        // Prefer the richest shape we encounter for a given name.
+        const existing = shapes.get(base);
+        const incoming = t.properties ?? [];
+        if (!existing || incoming.length > existing.length) {
+          shapes.set(base, incoming);
+        }
       }
-      if (t.properties) {
+
+      if (t.properties && !seen.has(base)) {
+        seen.add(base);
         for (const p of t.properties) visit(p.type);
       }
     };
@@ -208,7 +284,47 @@ export class TypedClientGenerator {
       }
     }
 
-    return names;
+    return shapes;
+  }
+
+  /**
+   * Collects enum-like types as string literal unions, which is both accurate
+   * and dependency free in the generated output.
+   */
+  private collectEnums(controllers: ControllerInfo[]): Map<string, string[]> {
+    const enums = new Map<string, string[]>();
+    const seen = new Set<string>();
+
+    const visit = (t: AnalyzedType) => {
+      const base = t.type.replace(/\[\]$/, '');
+
+      if (t.enumValues && t.enumValues.length > 0 && this.isNamedType(base)) {
+        enums.set(base, t.enumValues);
+      }
+
+      if (t.properties && !seen.has(base)) {
+        seen.add(base);
+        for (const p of t.properties) visit(p.type);
+      }
+    };
+
+    for (const c of controllers) {
+      for (const m of c.methods) {
+        visit(m.returnType);
+        for (const p of m.parameters) visit(p.type);
+      }
+    }
+
+    return enums;
+  }
+
+  /** True for PascalCase names that map to a declared type, not a primitive. */
+  private isNamedType(name: string): boolean {
+    const primitives = new Set([
+      'string', 'number', 'boolean', 'any', 'void', 'unknown', 'object', 'never',
+      'null', 'undefined', 'Date', 'String', 'Number', 'Boolean', 'Object',
+    ]);
+    return !primitives.has(name) && /^[A-Z][A-Za-z0-9_]*$/.test(name);
   }
 
   private toTsType(t: AnalyzedType): string {

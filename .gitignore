@@ -48,8 +48,8 @@ examples/futuristic-ui-example.ts
 # Redundant (package.json `files` field is the source of truth)
 .npmignore
 
-# Coverage
-coverage/
+# Tarballs written by `npm pack`
+*.tgz
 
 # Temporary files
 *.tmp

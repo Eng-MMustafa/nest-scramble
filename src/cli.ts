@@ -8,6 +8,9 @@ import { PostmanCollectionGenerator } from './generators/PostmanCollectionGenera
 import { TypedClientGenerator } from './generators/TypedClientGenerator';
 import { ScannerService } from './scanner/ScannerService';
 import { OpenApiTransformer } from './utils/OpenApiTransformer';
+import { diffSpecs } from './diff/SpecDiff';
+import { DiffFormat, formatDiff } from './diff/DiffFormatter';
+import { ScrambleLogger } from './utils/ScrambleLogger';
 
 const packageJson = require('../package.json');
 
@@ -27,12 +30,18 @@ program
   .option('-b, --baseUrl <url>', 'Base URL for the API', 'http://localhost:3000')
   .option('-t, --title <title>', 'API title', 'NestJS API')
   .option('-v, --apiVersion <version>', 'API version', '1.0.0')
+  .option(
+    '-p, --globalPrefix <prefix>',
+    'Value passed to app.setGlobalPrefix(), prepended to every path',
+    '',
+  )
   .action(async (sourcePath: string, options: { 
     output: string; 
     format: string;
     baseUrl: string;
     title: string;
     apiVersion: string;
+    globalPrefix: string;
   }) => {
     try {
       console.log('\n' + '='.repeat(60));
@@ -70,7 +79,7 @@ program
         console.log(`✅ Typed client saved to: ${clientOutput}`);
       } else {
         console.log('📄 Generating OpenAPI specification...');
-        const transformer = new OpenApiTransformer(options.baseUrl);
+        const transformer = new OpenApiTransformer(options.baseUrl, options.globalPrefix);
         const spec = transformer.transform(controllers, options.title, options.apiVersion, options.baseUrl);
         fs.writeFileSync(outputPath, JSON.stringify(spec, null, 2));
         console.log(`✅ OpenAPI spec saved to: ${outputPath}`);
@@ -101,8 +110,6 @@ program
       console.log('='.repeat(60) + '\n');
 
       const { Project } = require('ts-morph');
-      const fs = require('fs');
-      const path = require('path');
 
       const modulePath = path.resolve(options.module);
       
@@ -198,5 +205,70 @@ program
       process.exit(1);
     }
   });
+
+/**
+ * Loads an OpenAPI document from either a spec file or a source directory.
+ *
+ * Generating from source is the reason this command can run anywhere: no
+ * database, no environment variables, no booting the application.
+ */
+function loadSpec(target: string, globalPrefix: string): Record<string, any> {
+  if (!fs.existsSync(target)) {
+    throw new Error(`Path not found: ${target}`);
+  }
+
+  if (fs.statSync(target).isDirectory()) {
+    const controllers = new ScannerService().scanControllers(target);
+    return new OpenApiTransformer('http://localhost:3000', globalPrefix).transform(controllers);
+  }
+
+  return JSON.parse(fs.readFileSync(target, 'utf-8'));
+}
+
+program
+  .command('diff')
+  .description('Compare two versions of your API and classify what changed')
+  .argument('<base>', 'Baseline: an OpenAPI JSON file or a source directory')
+  .argument('<head>', 'Candidate: an OpenAPI JSON file or a source directory')
+  .option('-f, --format <type>', 'Output format: text, json, or markdown', 'text')
+  .option('-o, --output <file>', 'Write the report to a file instead of stdout')
+  .option('--fail-on-breaking', 'Exit with code 1 when a breaking change is found', false)
+  .option(
+    '-p, --globalPrefix <prefix>',
+    'Value passed to app.setGlobalPrefix(), applied when generating from source',
+    '',
+  )
+  .action(
+    (
+      base: string,
+      head: string,
+      options: { format: string; output?: string; failOnBreaking: boolean; globalPrefix: string },
+    ) => {
+      try {
+        // Keep stdout clean so the report can be piped.
+        ScrambleLogger.configure('error');
+
+        const baseSpec = loadSpec(base, options.globalPrefix);
+        const headSpec = loadSpec(head, options.globalPrefix);
+
+        const result = diffSpecs(baseSpec, headSpec);
+        const report = formatDiff(result, options.format as DiffFormat);
+
+        if (options.output) {
+          fs.writeFileSync(options.output, report);
+          console.log(`Report written to: ${options.output}`);
+        } else {
+          console.log(report);
+        }
+
+        if (options.failOnBreaking && result.hasBreaking) {
+          process.exitCode = 1;
+        }
+      } catch (error) {
+        console.error('Error:', error instanceof Error ? error.message : error);
+        process.exit(1);
+      }
+    },
+  );
 
 program.parse();

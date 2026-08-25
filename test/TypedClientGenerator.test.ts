@@ -17,6 +17,17 @@ const optionalNumberType = { type: 'number', isArray: false, isOptional: true };
 const userDtoType = { type: 'UserDto', isArray: false, isOptional: false };
 const userArrayType = { type: 'UserDto', isArray: true, isOptional: false };
 
+/** A DTO whose shape the analyzer was able to resolve from the AST. */
+const resolvedUserDtoType = {
+  type: 'UserDto',
+  isArray: false,
+  isOptional: false,
+  properties: [
+    { name: 'id', type: numberType },
+    { name: 'email', type: stringType },
+  ],
+};
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('TypedClientGenerator', () => {
@@ -40,10 +51,10 @@ describe('TypedClientGenerator', () => {
     });
   });
 
-  // ── DTO stubs ──────────────────────────────────────────────────────────────
+  // ── DTO types ──────────────────────────────────────────────────────────
 
-  describe('DTO stubs', () => {
-    it('emits an interface stub for each referenced DTO', () => {
+  describe('DTO types', () => {
+    it('emits a real interface when the DTO shape is resolved', () => {
       const controller = makeController({
         methods: [
           {
@@ -51,12 +62,48 @@ describe('TypedClientGenerator', () => {
             httpMethod: 'GET',
             route: ':id',
             parameters: [{ name: 'id', type: stringType, decorator: 'Param', parameterLocation: 'path' }],
+            returnType: resolvedUserDtoType,
+          },
+        ],
+      });
+      const out = gen.generate([controller]);
+      expect(out).toContain('export interface UserDto {');
+      expect(out).toMatch(/id:\s*number;/);
+      expect(out).toMatch(/email:\s*string;/);
+    });
+
+    it('never emits an index-signature stub, which would defeat type safety', () => {
+      const controller = makeController({
+        methods: [
+          {
+            name: 'getUser',
+            httpMethod: 'GET',
+            route: ':id',
+            parameters: [],
+            returnType: resolvedUserDtoType,
+          },
+        ],
+      });
+      expect(gen.generate([controller])).not.toContain('[key: string]: unknown');
+    });
+
+    it('emits an unknown alias when the shape cannot be resolved from the AST', () => {
+      // Happens when a controller method has no explicit return type, so the
+      // analyzer never sees the property list. Surfacing `unknown` makes the
+      // missing information visible instead of silently accepting anything.
+      const controller = makeController({
+        methods: [
+          {
+            name: 'getUser',
+            httpMethod: 'GET',
+            route: ':id',
+            parameters: [],
             returnType: userDtoType,
           },
         ],
       });
       const out = gen.generate([controller]);
-      expect(out).toContain('export interface UserDto');
+      expect(out).toContain('export type UserDto = unknown;');
     });
 
     it('does not emit primitive types as stubs', () => {
@@ -76,7 +123,7 @@ describe('TypedClientGenerator', () => {
       expect(out).not.toContain('export interface number');
     });
 
-    it('deduplicates stubs when the same DTO appears multiple times', () => {
+    it('declares each DTO exactly once even when referenced repeatedly', () => {
       const controller = makeController({
         methods: [
           {
@@ -84,20 +131,52 @@ describe('TypedClientGenerator', () => {
             httpMethod: 'GET',
             route: ':id',
             parameters: [],
-            returnType: userDtoType,
+            returnType: resolvedUserDtoType,
           },
           {
             name: 'getAll',
             httpMethod: 'GET',
             route: '',
             parameters: [],
-            returnType: userArrayType,
+            returnType: { ...resolvedUserDtoType, isArray: true },
           },
         ],
       });
       const out = gen.generate([controller]);
-      const matches = (out.match(/export interface UserDto/g) || []).length;
+      const matches = (out.match(/export interface UserDto\b/g) || []).length;
       expect(matches).toBe(1);
+    });
+
+    it('emits enum-typed properties as string literal unions', () => {
+      const controller = makeController({
+        methods: [
+          {
+            name: 'getOne',
+            httpMethod: 'GET',
+            route: ':id',
+            parameters: [],
+            returnType: {
+              type: 'AccountDto',
+              isArray: false,
+              isOptional: false,
+              properties: [
+                {
+                  name: 'status',
+                  type: {
+                    type: 'AccountStatus',
+                    isArray: false,
+                    isOptional: false,
+                    enumValues: ['active', 'suspended'],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      });
+      const out = gen.generate([controller]);
+      expect(out).toContain("export type AccountStatus = 'active' | 'suspended';");
+      expect(out).toMatch(/status:\s*AccountStatus;/);
     });
   });
 
