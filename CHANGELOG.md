@@ -71,6 +71,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
   silent above `logLevel: 'info'`.
 
 ### Fixed
+- **The release pipeline could never run.** The `publish` job was complete — npm
+  provenance, `id-token` permissions, the token, and a `refs/tags/v*` guard — but the
+  workflow's `on.push` filter listed only `branches`. A tag ref matched nothing, so no
+  run ever started and the guard was a condition that could not occur. Pushing
+  `v3.2.0` reported success and released nothing.
+
+  `tags: ['v*']` makes the job reachable. A second gap in the same path: `npm publish`
+  uses the version in `package.json`, not the one in the tag, so a mismatched tag would
+  have released the wrong version under the right announcement — and npm forbids
+  reusing a version number. The job now refuses to publish unless the two agree.
 - **`npm run lint` had no configuration to run against.** Both `lint` and `lint:fix` were
   listed in `package.json` and recommended in `CONTRIBUTING.md`, ESLint and the
   TypeScript plugin were installed — but no config file existed, so a contributor

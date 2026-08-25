@@ -3,6 +3,10 @@ name: CI
 on:
   push:
     branches: [master, main]
+    # Without this, a `v*` tag matches no filter, no run starts, and the
+    # publish job below — which guards on exactly that ref — can never
+    # execute. Pushing a release tag would succeed and release nothing.
+    tags: ['v*']
   pull_request:
     branches: [master, main]
 
@@ -154,6 +158,20 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # npm publishes whatever package.json says, not what the tag says. A
+      # v3.2.0 tag on a 3.1.0 package would quietly release 3.1.0 under the
+      # wrong announcement, and the version cannot be reused afterwards.
+      - name: Refuse to publish if the tag and the package disagree
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p 'require("./package.json").version')"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "Tag v$TAG does not match package.json $PKG" >&2
+            exit 1
+          fi
+          echo "Publishing $PKG"
 
       - name: Build
         run: npm run build
