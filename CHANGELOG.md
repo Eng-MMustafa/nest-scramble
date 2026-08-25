@@ -83,10 +83,15 @@ automatically by their version stamp.
   run ever started and the guard was a condition that could not occur. Pushing
   `v3.2.0` reported success and released nothing.
 
-  `tags: ['v*']` makes the job reachable. A second gap in the same path: `npm publish`
-  uses the version in `package.json`, not the one in the tag, so a mismatched tag would
-  have released the wrong version under the right announcement — and npm forbids
-  reusing a version number. The job now refuses to publish unless the two agree.
+  `tags: ['v*']` makes tag pushes run the full gate — unit tests on three Node versions
+  and the e2e suite on NestJS 10 and 11 — instead of silently doing nothing.
+
+  Publishing itself is now done by hand: the automated job authenticated with a
+  repository secret, and a credential that only one person can rotate is a poor trade
+  for the convenience. What CI still owes a tag is the check a person cannot do
+  reliably — that the tag and `package.json` name the same version. `npm publish` uses
+  `package.json`, not the tag, so a mismatch would release the wrong version under the
+  right announcement, and npm does not allow a version number to be reused.
 - **`npm run lint` had no configuration to run against.** Both `lint` and `lint:fix` were
   listed in `package.json` and recommended in `CONTRIBUTING.md`, ESLint and the
   TypeScript plugin were installed — but no config file existed, so a contributor

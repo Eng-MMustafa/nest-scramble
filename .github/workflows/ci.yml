@@ -133,49 +133,20 @@ jobs:
           name: api-diff
           path: api-diff.md
 
-  publish:
-    name: Publish to npm
+  # Releases are published by hand from a maintainer's machine. What CI still
+  # owes a release tag is the check a person cannot do reliably: that the tag
+  # and package.json name the same version. npm refuses to reuse a version
+  # number, so a mismatch noticed after the fact cannot be corrected.
+  release-check:
+    name: Tag matches package version
     runs-on: ubuntu-latest
-    # `compat` is a gate, not decoration: it boots real Nest apps on both
-    # adapters and checks the tarball itself. Depending on `test` alone would
-    # let a tag publish a build whose Fastify routes or packaging are broken.
     needs: [test, compat]
     if: startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      id-token: write
-      contents: read
 
     steps:
-      # Without this the job builds, packs, prints the whole manifest and only
-      # then fails with ENEEDAUTH, which reads like a registry problem rather
-      # than a missing secret.
-      - name: Check the publish credential exists
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [ -z "${NPM_TOKEN:-}" ]; then
-            echo "The NPM_TOKEN secret is not set on this repository." >&2
-            echo "Add an npm automation token under Settings > Secrets and variables > Actions." >&2
-            exit 1
-          fi
+      - uses: actions/checkout@v4
 
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20.x
-          registry-url: https://registry.npmjs.org/
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      # npm publishes whatever package.json says, not what the tag says. A
-      # v3.2.0 tag on a 3.1.0 package would quietly release 3.1.0 under the
-      # wrong announcement, and the version cannot be reused afterwards.
-      - name: Refuse to publish if the tag and the package disagree
+      - name: Compare the tag against package.json
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME#v}"
@@ -184,12 +155,4 @@ jobs:
             echo "Tag v$TAG does not match package.json $PKG" >&2
             exit 1
           fi
-          echo "Publishing $PKG"
-
-      - name: Build
-        run: npm run build
-
-      - name: Publish with provenance
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          echo "Tag and package agree on $PKG" >> "$GITHUB_STEP_SUMMARY"

@@ -110,6 +110,33 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ---
 
+## Releasing
+
+Releases are published by hand. CI runs the full gate on a `v*` tag and verifies that
+the tag and `package.json` agree, but it does not publish.
+
+The order matters: the version has to be committed **before** the tag is created, or the
+tag will point at a commit that names a different version.
+
+```bash
+npm version <major|minor|patch> --no-git-tag-version
+# update the CHANGELOG heading with the version and today's date
+git commit -am "release: X.Y.Z"
+git push origin master
+
+git tag -a vX.Y.Z -m "vX.Y.Z"
+git push origin vX.Y.Z    # runs the gate; publishes nothing
+
+npm run build
+npm publish --access public
+```
+
+Bump the major version when the generated output changes in a way that can fail a
+consumer's build — the typed client and the OpenAPI document are the public surface here,
+not just the exported classes.
+
+---
+
 ## Reporting Bugs
 
 Please use the [Bug Report](.github/ISSUE_TEMPLATE/bug_report.md) issue template. Include:
