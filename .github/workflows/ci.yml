@@ -146,6 +146,19 @@ jobs:
       contents: read
 
     steps:
+      # Without this the job builds, packs, prints the whole manifest and only
+      # then fails with ENEEDAUTH, which reads like a registry problem rather
+      # than a missing secret.
+      - name: Check the publish credential exists
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NPM_TOKEN:-}" ]; then
+            echo "The NPM_TOKEN secret is not set on this repository." >&2
+            echo "Add an npm automation token under Settings > Secrets and variables > Actions." >&2
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
