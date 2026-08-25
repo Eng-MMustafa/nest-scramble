@@ -6,7 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
-## [3.2.0] - Unreleased
+## [4.0.0] - 2026-08-25
+
+A major version because the typed client generator changes its output in a way that can
+fail a consumer's build: the `[key: string]: unknown` index signature is gone, so code
+that passed properties the DTO never declared no longer compiles. Nothing else here
+requires action — the cache format also changed, but stale caches are discarded
+automatically by their version stamp.
 
 ### Added
 - **`nest-scramble diff <base> <head>`** — compares two versions of your API and
@@ -146,9 +152,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
-## [3.1.0] — folded into 3.2.0, never published separately
+## [3.1.0] — folded into 4.0.0, never published separately
 
-The entries below were completed before the 3.2.0 work started and ship in the same
+The entries below were completed before the 4.0.0 work started and ship in the same
 release. They are kept as their own group because together they form one coherent
 correctness pass over the v3.0.6 behaviour.
 
