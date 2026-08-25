@@ -13,62 +13,84 @@
 
 ---
 
-## Screenshots
+**Nest-Scramble reads your NestJS source with static TypeScript analysis and generates
+interactive API docs, an OpenAPI spec, a Postman collection, a typed client SDK and a
+live mock server — without booting your application, and without a single decorator.**
 
-<!--
-  TODO: add real assets. This is the single highest-impact change for adoption:
-  nobody installs a documentation UI library without seeing the UI.
-    docs/assets/docs-ui-dark.png    - /docs with the futuristic theme
-    docs/assets/docs-ui-light.png   - /docs with the classic theme
-    docs/assets/quickstart.gif      - npm i -> npx nest-scramble init -> /docs
--->
+```bash
+npm install nest-scramble
+npx nest-scramble init
+npm run start:dev        # → http://localhost:3000/docs
+```
 
-_Screenshots coming soon._
+- **Docs UI** — interactive dashboard at `/docs`, dark and light themes
+- **OpenAPI 3.0** — served at `/docs-json`, or written to a file from the CLI
+- **Typed client SDK** — real interfaces from your DTOs, native `fetch`, zero runtime deps
+- **Postman collection** — one command, file pickers for uploads included
+- **Live mocking** — every route under `/scramble-mock/*` with realistic fake data
+- **Breaking-change detection** — `nest-scramble diff` gates your CI
+
+> **Upgrading from v3?** The typed client now emits real interfaces instead of
+> `{ [key: string]: unknown }` stubs, so code that passed undeclared properties will
+> stop compiling — that is the point of the release. Details in
+> [What's New in v4.0.0](#whats-new-in-v400).
 
 ---
 
-## What's New in v4.0.0
+## Quick Start
 
-### Upgrading from v3
+### Option A — Auto-inject (30 seconds)
 
-One change can fail your build, and it is the point of the release: **the typed client
-no longer emits `{ [key: string]: unknown }` stubs.** Those accepted any property, so a
-misspelled or removed field type-checked cleanly. Real interfaces are now generated from
-your DTO shapes, and code that passed undeclared properties will stop compiling — which
-is the error the old output was hiding.
+```bash
+npm install nest-scramble
+npx nest-scramble init
+npm run start:dev
+# Visit http://localhost:3000/docs
+```
 
-The cache format changed too, but stale caches are discarded automatically by their
-version stamp. Nothing to do.
+The `init` command patches your `app.module.ts` automatically.
 
-### New
+### Option B — Manual
 
-- **`nest-scramble diff <base> <head>`** — classifies every API change as breaking,
-  warning or safe. Either side may be a spec file or a source directory, so it runs on a
-  pull request with no database and no application boot. `--fail-on-breaking` gates CI.
-- **Fastify adapter support**, verified end-to-end on NestJS 10 and 11.
-- **File uploads** — `@UseInterceptors(FileInterceptor(...))` becomes `multipart/form-data`
-  in the spec, `FormData` in the typed client, and a file picker in the Postman export.
-- **`class-validator` constraints** are read from your DTOs into the schema, so
-  `@MaxLength(50)` documents and mocks as a real limit.
+**1. Install**
 
-### Fixed
+```bash
+npm install nest-scramble
+# yarn add nest-scramble
+# pnpm add nest-scramble
+```
 
-- **A crash on every production install.** `chokidar` was imported at load time while
-  declared as a dev dependency, so `npm ci --omit=dev` failed with
-  `Cannot find module 'chokidar'`. It is now an optional peer dependency loaded lazily,
-  with a CI guard against the regression.
-- **NestJS 11 / Express 5 incompatibility** in the mock middleware's route pattern.
-- **Debugging into the library.** Source maps shipped but pointed at files that were not
-  published, so every stack frame showed "source not found". `src/` now ships.
-- **Options that did nothing.** `path`, `theme` and `customDomainIcon` were accepted and
-  ignored. Five others still are — they now warn at startup naming the alternative,
-  instead of failing silently.
-- **Library output is silenceable** via `logLevel: 'silent'`, routed through the NestJS
-  logger rather than raw `console.log`.
-- **The Scalar CDN bundle is pinned** to a major version, and can be self-hosted with
-  `scalarUrl` for air-gapped environments.
+**2. Register the module**
 
-Full detail in [CHANGELOG.md](CHANGELOG.md).
+```typescript
+import { Module } from '@nestjs/common';
+import { NestScrambleModule } from 'nest-scramble';
+
+@Module({
+  imports: [NestScrambleModule.forRoot()], // zero-config
+})
+export class AppModule {}
+```
+
+**3. Start your app**
+
+```bash
+npm run start:dev
+```
+
+Terminal output:
+
+```
+╔═══════════════════════════════════════════════════════╗
+║  ✨ NEST-SCRAMBLE by Mohamed Mustafa                  ║
+║                                                       ║
+║  ● Docs      → http://localhost:3000/docs             ║
+║  ● OpenAPI   → http://localhost:3000/docs-json        ║
+║  ● Mock      → http://localhost:3000/scramble-mock    ║
+║                                                       ║
+║  📦 Source: src   🎯 Controllers: 5                   ║
+╚═══════════════════════════════════════════════════════╝
+```
 
 ---
 
@@ -163,63 +185,6 @@ That makes these possible:
 
 If you need full OpenAPI fidelity today, `@nestjs/swagger` is the safer choice.
 If you need a spec without booting your app, Nest-Scramble is the only option.
-
----
-
-## Quick Start
-
-### Option A — Auto-inject (30 seconds)
-
-```bash
-npm install nest-scramble
-npx nest-scramble init
-npm run start:dev
-# Visit http://localhost:3000/docs
-```
-
-The `init` command patches your `app.module.ts` automatically.
-
-### Option B — Manual
-
-**1. Install**
-
-```bash
-npm install nest-scramble
-# yarn add nest-scramble
-# pnpm add nest-scramble
-```
-
-**2. Register the module**
-
-```typescript
-import { Module } from '@nestjs/common';
-import { NestScrambleModule } from 'nest-scramble';
-
-@Module({
-  imports: [NestScrambleModule.forRoot()], // zero-config
-})
-export class AppModule {}
-```
-
-**3. Start your app**
-
-```bash
-npm run start:dev
-```
-
-Terminal output:
-
-```
-╔═══════════════════════════════════════════════════════╗
-║  ✨ NEST-SCRAMBLE by Mohamed Mustafa                  ║
-║                                                       ║
-║  ● Docs      → http://localhost:3000/docs             ║
-║  ● OpenAPI   → http://localhost:3000/docs-json        ║
-║  ● Mock      → http://localhost:3000/scramble-mock    ║
-║                                                       ║
-║  📦 Source: src   🎯 Controllers: 5                   ║
-╚═══════════════════════════════════════════════════════╝
-```
 
 ---
 
@@ -738,6 +703,51 @@ npm run build
 ```
 
 **When reporting an issue, include:** Nest-Scramble version, NestJS version, Node.js version, TypeScript version, startup log output.
+
+---
+
+## What's New in v4.0.0
+
+### Upgrading from v3
+
+One change can fail your build, and it is the point of the release: **the typed client
+no longer emits `{ [key: string]: unknown }` stubs.** Those accepted any property, so a
+misspelled or removed field type-checked cleanly. Real interfaces are now generated from
+your DTO shapes, and code that passed undeclared properties will stop compiling — which
+is the error the old output was hiding.
+
+The cache format changed too, but stale caches are discarded automatically by their
+version stamp. Nothing to do.
+
+### New
+
+- **`nest-scramble diff <base> <head>`** — classifies every API change as breaking,
+  warning or safe. Either side may be a spec file or a source directory, so it runs on a
+  pull request with no database and no application boot. `--fail-on-breaking` gates CI.
+- **Fastify adapter support**, verified end-to-end on NestJS 10 and 11.
+- **File uploads** — `@UseInterceptors(FileInterceptor(...))` becomes `multipart/form-data`
+  in the spec, `FormData` in the typed client, and a file picker in the Postman export.
+- **`class-validator` constraints** are read from your DTOs into the schema, so
+  `@MaxLength(50)` documents and mocks as a real limit.
+
+### Fixed
+
+- **A crash on every production install.** `chokidar` was imported at load time while
+  declared as a dev dependency, so `npm ci --omit=dev` failed with
+  `Cannot find module 'chokidar'`. It is now an optional peer dependency loaded lazily,
+  with a CI guard against the regression.
+- **NestJS 11 / Express 5 incompatibility** in the mock middleware's route pattern.
+- **Debugging into the library.** Source maps shipped but pointed at files that were not
+  published, so every stack frame showed "source not found". `src/` now ships.
+- **Options that did nothing.** `path`, `theme` and `customDomainIcon` were accepted and
+  ignored. Five others still are — they now warn at startup naming the alternative,
+  instead of failing silently.
+- **Library output is silenceable** via `logLevel: 'silent'`, routed through the NestJS
+  logger rather than raw `console.log`.
+- **The Scalar CDN bundle is pinned** to a major version, and can be self-hosted with
+  `scalarUrl` for air-gapped environments.
+
+Full detail in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

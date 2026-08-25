@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [4.0.2] - 2026-08-25
+
+### Changed
+- **The npm page now opens with what the library does, not with release notes.** The
+  README led with an empty "Screenshots coming soon" section followed by forty lines of
+  changelog before a reader learned what the package was for. It now opens with a
+  one-paragraph pitch, the three-command quick start and a feature list; the release
+  notes moved to the end, next to the upgrade guides. No code changed in this release.
+
+---
+
 ## [4.0.1] - 2026-08-25
 
 ### Fixed
