@@ -6,6 +6,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [4.0.1] - 2026-08-25
+
+### Fixed
+- **The README shipped in 4.0.0 announced "What's New in v3.1.0".** The page a reader
+  lands on from npm described a release two versions old and omitted the one change that
+  can fail their build. It now leads with the upgrade note. A README is only correctable
+  by publishing again — the registry is immutable, and a version number cannot be reused
+  even after `npm unpublish` — so this is a release of its own rather than an amendment.
+- **The typed client stamped a frozen version into generated files.**
+  `TypedClientGenerator.generate()` defaulted to the literal `'3.0.4'`, so anyone calling
+  it through the library API — rather than the CLI, which passes the real version — got a
+  header three releases out of date in a file that looks authoritative and is never
+  questioned. The default now reads `package.json`, and a test asserts it tracks the
+  package rather than a literal.
+
+---
+
 ## [4.0.0] - 2026-08-25
 
 A major version because the typed client generator changes its output in a way that can

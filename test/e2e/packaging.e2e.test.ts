@@ -130,6 +130,24 @@ describe('published package (e2e)', () => {
       expect([...paths].filter((p) => p.includes('fixtures/'))).toEqual([]);
     });
 
+    it('announces the current release line', () => {
+      // 4.0.0 shipped a README headed "What's New in v3.1.0". The npm page is the
+      // first thing a reader sees, it cannot be corrected without publishing again,
+      // and nothing failed to warn us — the heading is prose.
+      //
+      // Compared on major.minor only: a patch fixes things, it does not add news,
+      // so requiring an exact match would just force a pointless edit each time.
+      const readme = fs.readFileSync(path.join(__dirname, '../../README.md'), 'utf-8');
+      const { version } = JSON.parse(
+        fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf-8'),
+      );
+      const heading = readme.match(/^## What's New in v(\S+)/m);
+      const line = (v: string) => v.split('.').slice(0, 2).join('.');
+
+      expect(heading).not.toBeNull();
+      expect(line(heading![1])).toBe(line(version));
+    });
+
     it('excludes demonstration material', () => {
       // Demo scripts and a sample controller were compiled into dist/ and
       // published: 89kB of code no consumer can call. They stay in the

@@ -87,9 +87,10 @@ module.exports = {
       },
     },
     {
-      // Reads its own package.json for `--version`, which a static import would
-      // pull into the build output and shift every emitted path by one level.
-      files: ['src/cli.ts'],
+      // Both read their own package.json for a version string. A static import
+      // would pull the file into the compilation, which sits above `rootDir`
+      // and would shift every emitted path down one level.
+      files: ['src/cli.ts', 'src/generators/TypedClientGenerator.ts'],
       rules: {
         '@typescript-eslint/no-var-requires': 'off',
       },

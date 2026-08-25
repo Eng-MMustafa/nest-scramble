@@ -1,0 +1,11 @@
+// The editor resolves a file against the nearest tsconfig.json. The root one
+// excludes `**/*.test.ts`, so without this every test file showed fifty errors
+// for `describe`, `expect` and `__dirname` — none of them real, since the suite
+// is type-checked against tsconfig.test.json and passes.
+//
+// Constant false errors are worse than no errors: they teach you to ignore the
+// red, and a genuine one then hides in the noise.
+{
+  "extends": "../tsconfig.test.json",
+  "include": ["../src/**/*", "../test/**/*"]
+}
