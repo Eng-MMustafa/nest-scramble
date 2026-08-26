@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
-## [Unreleased]
+## [5.0.0] - 2026-08-26
 
 ### Changed
 - **Zero runtime dependencies.** All three are gone:
@@ -24,11 +24,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
   In a NestJS project, installing this package now adds ~0.8 MB and **no other
   packages**. A bare production install (peers included) drops from 59.8 MB /
   49 packages to 36.4 MB / 23 packages.
+
+### Breaking
 - **Scanner internals now speak `ts.Node` instead of ts-morph wrappers.** The
   signatures of `ScannerService.extractControllerInfo`, `DtoAnalyzer`,
   `extractValidationConstraints`, `extractFileFields` and `DependencyTracker`
-  take `typescript` AST nodes. `scanControllers(sourcePath)` and every generated
-  artifact are unchanged.
+  take `typescript` AST nodes — this is the only reason for the major bump.
+  `scanControllers(sourcePath)`, the NestJS module, the CLI and every generated
+  artifact are unchanged; upgrading requires no code changes unless you called
+  those internals with ts-morph nodes directly.
 
 ---
 

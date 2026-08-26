@@ -31,10 +31,11 @@ npm run start:dev        # → http://localhost:3000/docs
 - **Live mocking** — every route under `/scramble-mock/*` with realistic fake data
 - **Breaking-change detection** — `nest-scramble diff` gates your CI
 
-> **Upgrading from v3?** The typed client now emits real interfaces instead of
-> `{ [key: string]: unknown }` stubs, so code that passed undeclared properties will
-> stop compiling — that is the point of the release. Details in
-> [What's New in v4.0.0](#whats-new-in-v400).
+> **Upgrading?** v5 is a major in name only — the library dropped its last runtime
+> dependency, and the version bump exists because some exported scanner internals
+> changed signature. No code changes are needed. Coming from v3? See
+> [What's New in v4.0.0](#whats-new-in-v400) — the typed client emits real interfaces
+> and stricter code may stop compiling, which is the point.
 
 ---
 
@@ -706,6 +707,23 @@ npm run build
 ```
 
 **When reporting an issue, include:** Nest-Scramble version, NestJS version, Node.js version, TypeScript version, startup log output.
+
+---
+
+## What's New in v5.0.0
+
+**Zero runtime dependencies.** The scanner now drives the `typescript` compiler API
+directly instead of going through `ts-morph`, which bundled a second copy of the
+compiler into every install. Together with the earlier removal of `@faker-js/faker`
+and `commander`, installing nest-scramble into a NestJS project now adds ~0.8 MB and
+no other packages.
+
+**Why a major?** Exported scanner internals (`ScannerService.extractControllerInfo`,
+`DtoAnalyzer`, `extractValidationConstraints`, `extractFileFields`,
+`DependencyTracker`) now take `typescript` AST nodes instead of ts-morph wrappers.
+`scanControllers(sourcePath)`, the NestJS module, the CLI and every generated artifact
+are unchanged — upgrading requires no code changes unless you called those internals
+with ts-morph nodes directly.
 
 ---
 
