@@ -8,6 +8,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ## [Unreleased]
 
+### Changed
+- **The docs UI is now built-in and fully self-contained.** The `/docs` page
+  used to load the Scalar bundle (>1 MB) from a public CDN plus two Google
+  Fonts — three network dependencies at every page view, and a blank page on
+  air-gapped networks. The new UI is a single ~27 KB HTML response: inline CSS,
+  inline vanilla JS, system fonts, zero external requests. It ships a grouped
+  sidebar, search, light/dark themes, schema trees with validation constraints,
+  generated examples, and a try-it panel that sends real requests. Setting
+  `scalarUrl` still opts in to hosting Scalar from a URL you control.
+- **Watch mode no longer needs chokidar.** The file watcher now uses Node's own
+  `fs.watch` (recursive on Windows/macOS/modern Linux, with a per-directory
+  fallback elsewhere). chokidar is removed from the peer dependencies — the
+  package now has zero runtime *and* zero optional-peer external packages.
+  `npm install chokidar` is no longer required for `enableWatchMode`.
+
+### Removed
+- `DEFAULT_SCALAR_URL` is no longer exported; there is no default Scalar URL
+  because Scalar is opt-in via `scalarUrl`.
+
 ### Fixed
 - **`init` no longer injects a duplicate `forRoot()`.** The already-installed
   check only recognized `import` declarations, so a module that loaded the

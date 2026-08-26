@@ -74,11 +74,9 @@ module.exports = {
       },
     },
     {
-      // Optional peer dependencies (chokidar) and the host's own TypeScript are
-      // resolved lazily with `require`, so that importing this package never
-      // throws when they are absent. A static import would defeat that.
+      // A few modules resolve `fs` lazily with `require` inside rarely-taken
+      // branches to keep module load light.
       files: [
-        'src/watcher/*.ts',
         'src/tracker/DependencyTracker.ts',
         'src/scanner/ScannerService.ts',
       ],

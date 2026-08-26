@@ -1,4 +1,3 @@
-const chokidar = require('chokidar');
 const { ScannerService } = require('../dist/scanner/ScannerService');
 const { PostmanCollectionGenerator } = require('../dist/generators/PostmanCollectionGenerator');
 const { OpenApiTransformer } = require('../dist/utils/OpenApiTransformer');
@@ -35,13 +34,13 @@ function generate() {
 // Initial generation
 generate();
 
-// Watch for changes
-chokidar.watch(path.join(sourcePath, '**/*.ts'), {
-  ignored: /(^|[\/\\])\../, // ignore dotfiles
-  persistent: true
-}).on('change', (filePath) => {
-  console.log(`File ${filePath} changed, regenerating...`);
-  generate();
+// Watch for changes (debounced: fs.watch fires several events per save)
+let timer = null;
+fs.watch(sourcePath, { recursive: true }, (_event, fileName) => {
+  if (!fileName || !fileName.toString().endsWith('.ts')) return;
+  console.log(`File ${fileName} changed, regenerating...`);
+  clearTimeout(timer);
+  timer = setTimeout(generate, 300);
 });
 
 console.log('Watching for changes in src/**/*.ts');

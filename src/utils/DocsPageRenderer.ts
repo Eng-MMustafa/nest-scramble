@@ -1,4 +1,5 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
+import { renderScrambleDocsUi } from '../ui/ScrambleDocsUi';
 
 export type DocsTheme = 'classic' | 'futuristic';
 
@@ -14,18 +15,12 @@ export interface DocsPageOptions {
   /** Optional favicon URL */
   faviconUrl?: string;
   /**
-   * Full URL of the Scalar standalone bundle. Override this to self-host the
-   * asset in air-gapped environments instead of relying on the public CDN.
+   * Full URL of a Scalar standalone bundle. When set, the docs page hosts the
+   * Scalar UI from that URL instead of the built-in zero-dependency UI. This
+   * is an explicit opt-in to an external asset.
    */
   scalarUrl?: string;
 }
-
-/**
- * Pinned to the v1 major line so a future breaking Scalar release cannot break
- * the docs page of every nest-scramble user without a nest-scramble release.
- * Override with `scalarUrl` to self-host.
- */
-export const DEFAULT_SCALAR_URL = 'https://cdn.jsdelivr.net/npm/@scalar/api-reference@1';
 
 const DEFAULT_PRIMARY_COLOR = '#00f2ff';
 
@@ -53,20 +48,45 @@ export function sanitizeHexColor(value: string | undefined, fallback = DEFAULT_P
 }
 
 /**
- * Renders the standalone HTML page that hosts the Scalar API reference.
+ * Renders the docs page.
+ *
+ * By default this is the built-in, fully self-contained UI: inline CSS and
+ * JS, system fonts, nothing loaded from a CDN. Setting `scalarUrl` opts in to
+ * hosting the Scalar UI from that URL instead — kept for teams that already
+ * standardised on Scalar and self-host its bundle.
  *
  * Kept free of NestJS imports so it can be unit tested without a Nest context.
  */
 export function renderDocsPage(options: DocsPageOptions): string {
   const theme: DocsTheme = options.theme === 'classic' ? 'classic' : 'futuristic';
   const primaryColor = sanitizeHexColor(options.primaryColor);
-  const title = escapeHtml(options.title || 'API Documentation');
-  const specUrl = escapeHtml(options.specUrl);
-  const scalarUrl = escapeHtml(options.scalarUrl || DEFAULT_SCALAR_URL);
-
   const faviconTag = options.faviconUrl
     ? `\n  <link rel="icon" href="${escapeHtml(options.faviconUrl)}" />`
     : '';
+
+  if (!options.scalarUrl) {
+    return renderScrambleDocsUi({
+      specUrl: options.specUrl,
+      title: options.title || 'API Documentation',
+      primaryColor,
+      initialTheme: theme === 'futuristic' ? 'dark' : 'light',
+      faviconTag,
+    });
+  }
+
+  return renderScalarHostPage(options, theme, primaryColor, faviconTag);
+}
+
+/** The legacy Scalar host page, rendered only on explicit opt-in. */
+function renderScalarHostPage(
+  options: DocsPageOptions,
+  theme: DocsTheme,
+  primaryColor: string,
+  faviconTag: string,
+): string {
+  const title = escapeHtml(options.title || 'API Documentation');
+  const specUrl = escapeHtml(options.specUrl);
+  const scalarUrl = escapeHtml(options.scalarUrl!);
 
   // Scalar reads its options from this attribute; `darkMode` is what actually
   // switches the rendered theme.
@@ -82,9 +102,6 @@ export function renderDocsPage(options: DocsPageOptions): string {
   <title>${title}</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />${faviconTag}
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     body {
       margin: 0;
@@ -97,8 +114,8 @@ export function renderDocsPage(options: DocsPageOptions): string {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
     }
     :root {
-      --scalar-font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
-      --scalar-font-code: 'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+      --scalar-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+      --scalar-font-code: ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
     }
     .light-mode {
       --scalar-color-1: #141824;

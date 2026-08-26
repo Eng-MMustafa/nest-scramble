@@ -75,7 +75,7 @@ describe('NestScrambleModule on Fastify (e2e)', () => {
 
       expect(res.status).toBe(200);
       expect(res.headers.get('content-type')).toContain('text/html');
-      expect(await res.text()).toContain('id="api-reference"');
+      expect(await res.text()).toContain("SPEC_URL = '/docs-json'");
     });
 
     it('serves a valid OpenAPI document', async () => {
@@ -139,7 +139,7 @@ describe('NestScrambleModule on Fastify (e2e)', () => {
       try {
         const res = await fetch(`${customUrl}/api/reference`);
         expect(res.status).toBe(200);
-        expect(await res.text()).toContain('data-url="/api/reference-json"');
+        expect(await res.text()).toContain("SPEC_URL = '/api/reference-json'");
       } finally {
         await custom.close();
       }

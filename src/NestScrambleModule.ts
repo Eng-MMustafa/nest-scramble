@@ -61,8 +61,9 @@ export interface NestScrambleOptions {
    */
   enableApiVersioning?: boolean;
   /**
-   * Full URL of the Scalar standalone bundle. Override to self-host the asset
-   * instead of loading it from the public CDN (required in air-gapped setups).
+   * Opt-in: full URL of a Scalar standalone bundle. When set, the docs page
+   * hosts the Scalar UI from that URL instead of the built-in zero-dependency
+   * UI. Leave unset for a fully self-contained docs page.
    */
   scalarUrl?: string;
   /**

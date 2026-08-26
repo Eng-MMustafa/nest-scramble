@@ -24,7 +24,7 @@ npm run start:dev        # → http://localhost:3000/docs
 ```
 
 - **Zero runtime dependencies** — in a NestJS project, installing this package adds nothing but this package
-- **Docs UI** — interactive dashboard at `/docs`, dark and light themes
+- **Docs UI** — built-in interactive reference at `/docs`: search, schema trees, try-it panel, dark and light themes — one ~27 KB page, no CDN, works offline and air-gapped
 - **OpenAPI 3.0** — served at `/docs-json`, or written to a file from the CLI
 - **Typed client SDK** — real interfaces from your DTOs, native `fetch`, zero runtime deps
 - **Postman collection** — one command, file pickers for uploads included
@@ -400,8 +400,8 @@ NestScrambleModule.forRoot({
 ```
 
 > **Watch mode is programmatic only.** It is exposed as `WatchModeService`, not as
-> a `forRoot()` option, and requires the optional peer dependency `chokidar`:
-> `npm install chokidar`.
+> a `forRoot()` option. It watches files with Node's own `fs.watch` — no extra
+> install needed.
 
 The cache is invalidated automatically when the file content, the file size,
 `tsconfig.json`, or the installed `nest-scramble` version changes — so upgrading

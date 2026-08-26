@@ -1,5 +1,4 @@
 import {
-  DEFAULT_SCALAR_URL,
   escapeHtml,
   renderDocsPage,
   sanitizeHexColor,
@@ -45,56 +44,124 @@ describe('sanitizeHexColor', () => {
   });
 });
 
-describe('renderDocsPage', () => {
-  it('points the Scalar mount at the given spec URL', () => {
+describe('renderDocsPage (built-in UI, default)', () => {
+  it('fetches the OpenAPI document from the given spec URL', () => {
     const html = renderDocsPage({ specUrl: '/api/reference-json' });
-    expect(html).toContain('data-url="/api/reference-json"');
+    expect(html).toContain("SPEC_URL = '/api/reference-json'");
   });
 
-  it('pins the Scalar bundle to a major version by default', () => {
+  it('is fully self-contained: no CDN, no external fonts, no external scripts', () => {
     const html = renderDocsPage({ specUrl: '/docs-json' });
-    expect(html).toContain(DEFAULT_SCALAR_URL);
-    // An unpinned URL lets an upstream breaking release break every consumer.
-    expect(html).not.toContain('@scalar/api-reference"');
+    // Nothing on the page loads from the network: no script/style/font tags
+    // pointing anywhere, and no CSS imports.
+    expect(html).not.toContain('<script src');
+    expect(html).not.toContain('<link href');
+    expect(html).not.toContain('<link rel="stylesheet"');
+    expect(html).not.toContain('@import');
+    expect(html).not.toContain('fonts.googleapis.com');
+    expect(html).not.toContain('cdn.');
   });
 
-  it('allows self-hosting the Scalar bundle for air-gapped setups', () => {
+  it('starts dark for the futuristic theme', () => {
+    const html = renderDocsPage({ specUrl: '/docs-json', theme: 'futuristic' });
+    expect(html).toContain('data-theme="dark"');
+  });
+
+  it('starts light for the classic theme', () => {
+    const html = renderDocsPage({ specUrl: '/docs-json', theme: 'classic' });
+    expect(html).toContain('data-theme="light"');
+  });
+
+  it('defaults to the futuristic theme', () => {
+    const html = renderDocsPage({ specUrl: '/docs-json' });
+    expect(html).toContain('data-theme="dark"');
+  });
+
+  it('supports switching themes at runtime', () => {
+    const html = renderDocsPage({ specUrl: '/docs-json' });
+    expect(html).toContain('theme-toggle');
+    expect(html).toContain("[data-theme='light']");
+    expect(html).toContain("[data-theme='dark']");
+  });
+
+  it('applies the primary colour to the accent CSS variable', () => {
+    const html = renderDocsPage({ specUrl: '/docs-json', primaryColor: '#a855f7' });
+    expect(html).toContain('--accent: #a855f7;');
+  });
+
+  it('falls back to the default colour for malformed input', () => {
+    const html = renderDocsPage({ specUrl: '/docs-json', primaryColor: 'javascript:alert(1)' });
+    expect(html).toContain('--accent: #00f2ff;');
+    expect(html).not.toContain('javascript:alert(1)');
+  });
+
+  it('includes the try-it panel and search', () => {
+    const html = renderDocsPage({ specUrl: '/docs-json' });
+    expect(html).toContain('Try it');
+    expect(html).toContain('id="search"');
+  });
+});
+
+describe('renderDocsPage (Scalar opt-in)', () => {
+  it('hosts the Scalar bundle only when scalarUrl is set', () => {
     const html = renderDocsPage({
       specUrl: '/docs-json',
       scalarUrl: '/assets/scalar.js',
     });
     expect(html).toContain('src="/assets/scalar.js"');
-    expect(html).not.toContain('cdn.jsdelivr.net');
+    expect(html).toContain('data-url="/docs-json"');
+  });
+
+  it('does not load fonts from a CDN even on the Scalar page', () => {
+    const html = renderDocsPage({
+      specUrl: '/docs-json',
+      scalarUrl: '/assets/scalar.js',
+    });
+    expect(html).not.toContain('fonts.googleapis.com');
+    expect(html).not.toContain('fonts.gstatic.com');
   });
 
   it('enables dark mode for the futuristic theme', () => {
-    const html = renderDocsPage({ specUrl: '/docs-json', theme: 'futuristic' });
+    const html = renderDocsPage({
+      specUrl: '/docs-json',
+      theme: 'futuristic',
+      scalarUrl: '/assets/scalar.js',
+    });
     expect(html).toContain('&quot;darkMode&quot;:true');
   });
 
   it('disables dark mode for the classic theme', () => {
-    const html = renderDocsPage({ specUrl: '/docs-json', theme: 'classic' });
+    const html = renderDocsPage({
+      specUrl: '/docs-json',
+      theme: 'classic',
+      scalarUrl: '/assets/scalar.js',
+    });
     expect(html).toContain('&quot;darkMode&quot;:false');
   });
 
-  it('defaults to the futuristic theme', () => {
-    const html = renderDocsPage({ specUrl: '/docs-json' });
-    expect(html).toContain('&quot;darkMode&quot;:true');
-  });
-
-  it('applies the primary colour to the accent CSS variables', () => {
-    const html = renderDocsPage({ specUrl: '/docs-json', primaryColor: '#a855f7' });
+  it('applies the primary colour to the Scalar accent variables', () => {
+    const html = renderDocsPage({
+      specUrl: '/docs-json',
+      primaryColor: '#a855f7',
+      scalarUrl: '/assets/scalar.js',
+    });
     expect(html).toContain('--scalar-color-accent: #a855f7;');
   });
+});
 
-  it('falls back to the default colour for malformed input', () => {
-    const html = renderDocsPage({ specUrl: '/docs-json', primaryColor: 'javascript:alert(1)' });
-    expect(html).toContain('--scalar-color-accent: #00f2ff;');
-    expect(html).not.toContain('javascript:alert(1)');
-  });
+describe('renderDocsPage (shared behaviour)', () => {
 
   it('renders a favicon link when one is configured', () => {
     const html = renderDocsPage({ specUrl: '/docs-json', faviconUrl: '/logo.png' });
+    expect(html).toContain('<link rel="icon" href="/logo.png" />');
+  });
+
+  it('renders the favicon on the Scalar page too', () => {
+    const html = renderDocsPage({
+      specUrl: '/docs-json',
+      faviconUrl: '/logo.png',
+      scalarUrl: '/assets/scalar.js',
+    });
     expect(html).toContain('<link rel="icon" href="/logo.png" />');
   });
 

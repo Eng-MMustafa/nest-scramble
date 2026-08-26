@@ -78,8 +78,12 @@ describe('NestScrambleModule (e2e)', () => {
       expect(res.headers.get('content-type')).toContain('text/html');
 
       const html = await res.text();
-      expect(html).toContain('id="api-reference"');
-      expect(html).toContain('data-url="/docs-json"');
+      expect(html).toContain("SPEC_URL = '/docs-json'");
+      // The page must be self-contained: no CDN scripts, no external fonts.
+      expect(html).not.toContain('<script src');
+      expect(html).not.toContain('<link href');
+      expect(html).not.toContain('fonts.googleapis.com');
+      expect(html).not.toContain('cdn.');
     });
 
     it('serves a valid OpenAPI document at /docs-json', async () => {
@@ -129,12 +133,12 @@ describe('NestScrambleModule (e2e)', () => {
     it('serves docs at the configured path instead of /docs', async () => {
       const res = await fetch(`${baseUrl}/api/reference`);
       expect(res.status).toBe(200);
-      expect(await res.text()).toContain('id="api-reference"');
+      expect(await res.text()).toContain("SPEC_URL = '/api/reference-json'");
     });
 
     it('points the UI at the matching spec URL', async () => {
       const html = await (await fetch(`${baseUrl}/api/reference`)).text();
-      expect(html).toContain('data-url="/api/reference-json"');
+      expect(html).toContain('href="/api/reference-json"');
     });
 
     it('serves the spec under the configured path', async () => {
@@ -154,7 +158,7 @@ describe('NestScrambleModule (e2e)', () => {
       const { app, baseUrl } = await bootApp({ theme: 'futuristic' });
       try {
         const html = await (await fetch(`${baseUrl}/docs`)).text();
-        expect(html).toContain('&quot;darkMode&quot;:true');
+        expect(html).toContain('data-theme="dark"');
       } finally {
         await app.close();
       }
@@ -164,7 +168,7 @@ describe('NestScrambleModule (e2e)', () => {
       const { app, baseUrl } = await bootApp({ theme: 'classic' });
       try {
         const html = await (await fetch(`${baseUrl}/docs`)).text();
-        expect(html).toContain('&quot;darkMode&quot;:false');
+        expect(html).toContain('data-theme="light"');
       } finally {
         await app.close();
       }
