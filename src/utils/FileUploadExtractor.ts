@@ -1,5 +1,11 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
-import { MethodDeclaration, Node } from 'ts-morph';
+import * as ts from 'typescript';
+import {
+  getDecoratorArguments,
+  getDecoratorName,
+  getDecorators,
+  objectPropertyInitializer,
+} from '../analysis/AstHelpers';
 
 /**
  * A `multipart/form-data` field that carries a file.
@@ -22,47 +28,37 @@ export interface FileFieldInfo {
 const FALLBACK_FIELD = 'file';
 
 /** Reads a string literal argument. */
-function stringArg(args: Node[], index: number): string | undefined {
+function stringArg(args: readonly ts.Expression[], index: number): string | undefined {
   const arg = args[index];
-  return arg && Node.isStringLiteral(arg) ? arg.getLiteralValue() : undefined;
+  return arg && ts.isStringLiteral(arg) ? arg.text : undefined;
 }
 
 /** Reads a numeric literal argument. */
-function numberArg(args: Node[], index: number): number | undefined {
+function numberArg(args: readonly ts.Expression[], index: number): number | undefined {
   const arg = args[index];
-  return arg && Node.isNumericLiteral(arg) ? arg.getLiteralValue() : undefined;
+  return arg && ts.isNumericLiteral(arg) ? Number(arg.text) : undefined;
 }
 
 /**
  * Parses `FileFieldsInterceptor([{ name: 'avatar', maxCount: 1 }, ...])`.
  */
-function parseFileFieldsArray(args: Node[]): FileFieldInfo[] {
+function parseFileFieldsArray(args: readonly ts.Expression[]): FileFieldInfo[] {
   const arg = args[0];
-  if (!arg || !Node.isArrayLiteralExpression(arg)) return [];
+  if (!arg || !ts.isArrayLiteralExpression(arg)) return [];
 
   const fields: FileFieldInfo[] = [];
 
-  for (const element of arg.getElements()) {
-    if (!Node.isObjectLiteralExpression(element)) continue;
+  for (const element of arg.elements) {
+    if (!ts.isObjectLiteralExpression(element)) continue;
 
-    const nameProp = element.getProperty('name');
-    if (!nameProp || !Node.isPropertyAssignment(nameProp)) continue;
+    const nameInit = objectPropertyInitializer(element, 'name');
+    if (!nameInit || !ts.isStringLiteral(nameInit)) continue;
 
-    const nameInit = nameProp.getInitializer();
-    if (!nameInit || !Node.isStringLiteral(nameInit)) continue;
-
-    const maxCountProp = element.getProperty('maxCount');
-    let maxCount: number | undefined;
-
-    if (maxCountProp && Node.isPropertyAssignment(maxCountProp)) {
-      const maxInit = maxCountProp.getInitializer();
-      if (maxInit && Node.isNumericLiteral(maxInit)) {
-        maxCount = maxInit.getLiteralValue();
-      }
-    }
+    const maxInit = objectPropertyInitializer(element, 'maxCount');
+    const maxCount = maxInit && ts.isNumericLiteral(maxInit) ? Number(maxInit.text) : undefined;
 
     fields.push({
-      name: nameInit.getLiteralValue(),
+      name: nameInit.text,
       // A field declared with maxCount > 1 accepts an array of files.
       multiple: maxCount === undefined ? false : maxCount > 1,
       maxCount,
@@ -73,7 +69,7 @@ function parseFileFieldsArray(args: Node[]): FileFieldInfo[] {
 }
 
 /** Maps one interceptor call to the file fields it declares. */
-function fieldsFromInterceptor(name: string, args: Node[]): FileFieldInfo[] {
+function fieldsFromInterceptor(name: string, args: readonly ts.Expression[]): FileFieldInfo[] {
   switch (name) {
     case 'FileInterceptor':
       return [{ name: stringArg(args, 0) ?? FALLBACK_FIELD, multiple: false }];
@@ -107,21 +103,19 @@ function fieldsFromInterceptor(name: string, args: Node[]): FileFieldInfo[] {
  * apply the same upload field to every route on the controller, which is not a
  * shape NestJS applications use in practice.
  */
-export function extractFileFields(method: MethodDeclaration): FileFieldInfo[] {
+export function extractFileFields(method: ts.MethodDeclaration): FileFieldInfo[] {
   const fields: FileFieldInfo[] = [];
 
-  for (const decorator of method.getDecorators()) {
-    if (decorator.getName() !== 'UseInterceptors') continue;
+  for (const decorator of getDecorators(method)) {
+    if (getDecoratorName(decorator) !== 'UseInterceptors') continue;
 
-    const args = decorator.getCallExpression()?.getArguments() ?? [];
+    for (const arg of getDecoratorArguments(decorator)) {
+      if (!ts.isCallExpression(arg)) continue;
 
-    for (const arg of args) {
-      if (!Node.isCallExpression(arg)) continue;
+      const callee = arg.expression;
+      if (!ts.isIdentifier(callee)) continue;
 
-      const callee = arg.getExpression();
-      if (!Node.isIdentifier(callee)) continue;
-
-      fields.push(...fieldsFromInterceptor(callee.getText(), arg.getArguments()));
+      fields.push(...fieldsFromInterceptor(callee.text, arg.arguments));
     }
   }
 

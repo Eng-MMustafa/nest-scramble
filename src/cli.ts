@@ -11,6 +11,7 @@ import { diffSpecs } from './diff/SpecDiff';
 import { DiffFormat, formatDiff } from './diff/DiffFormatter';
 import { ScrambleLogger } from './utils/ScrambleLogger';
 import { CliUsageError, CommandDef, formatHelp, parseCommand } from './utils/CliParser';
+import { getDecoratorArguments, getDecoratorName, getDecorators } from './analysis/AstHelpers';
 
 const packageJson = require('../package.json');
 
@@ -121,10 +122,10 @@ async function runInit(options: { module: string }): Promise<void> {
       console.log('   Developed by Mohamed Mustafa | MIT License');
       console.log('='.repeat(60) + '\n');
 
-      const { Project } = require('ts-morph');
+      const ts = require('typescript') as typeof import('typescript');
 
       const modulePath = path.resolve(options.module);
-      
+
       if (!fs.existsSync(modulePath)) {
         console.error(`❌ Module file not found: ${modulePath}`);
         console.error('💡 Try: nest-scramble init --module src/app.module.ts');
@@ -132,54 +133,61 @@ async function runInit(options: { module: string }): Promise<void> {
       }
 
       console.log(`📂 Found module: ${modulePath}`);
-      
-      const project = new Project();
-      const sourceFile = project.addSourceFileAtPath(modulePath);
 
-      // Check if already imported
-      const existingImport = sourceFile.getImportDeclaration(
-        (imp: any) => imp.getModuleSpecifierValue() === 'nest-scramble'
+      const originalText = fs.readFileSync(modulePath, 'utf-8');
+      const sourceFile = ts.createSourceFile(
+        modulePath,
+        originalText,
+        ts.ScriptTarget.Latest,
+        true,
       );
 
-      if (existingImport) {
+      // Check if already imported
+      const alreadyImported = sourceFile.statements.some(
+        (statement) =>
+          ts.isImportDeclaration(statement) &&
+          ts.isStringLiteral(statement.moduleSpecifier) &&
+          statement.moduleSpecifier.text === 'nest-scramble',
+      );
+
+      if (alreadyImported) {
         console.log('⚠️  Nest-Scramble is already imported in this module');
         console.log('✅ No changes needed!');
         process.exit(0);
       }
 
-      // Add import statement
-      console.log('📝 Adding import statement...');
-      sourceFile.addImportDeclaration({
-        moduleSpecifier: 'nest-scramble',
-        namedImports: ['NestScrambleModule'],
-      });
-
       // Find the @Module decorator
-      const classes = sourceFile.getClasses();
-      const moduleClass = classes.find((cls: any) => 
-        cls.getDecorator('Module') !== undefined
-      );
+      const moduleClass = sourceFile.statements
+        .filter(ts.isClassDeclaration)
+        .find((cls) =>
+          getDecorators(cls).some((decorator) => getDecoratorName(decorator) === 'Module'),
+        );
 
       if (!moduleClass) {
         console.error('❌ Could not find @Module decorator');
         console.error('💡 Please add NestScrambleModule.forRoot() manually');
         process.exit(1);
+        return;
       }
 
-      const moduleDecorator = moduleClass.getDecorator('Module');
-      const decoratorArgs = moduleDecorator?.getArguments();
-      
-      if (!decoratorArgs || decoratorArgs.length === 0) {
+      const moduleDecorator = getDecorators(moduleClass).find(
+        (decorator) => getDecoratorName(decorator) === 'Module',
+      )!;
+      const decoratorArgs = getDecoratorArguments(moduleDecorator);
+
+      if (decoratorArgs.length === 0) {
         console.error('❌ Module decorator has no arguments');
         process.exit(1);
+        return;
       }
 
+      // Rewrite the decorator's configuration object in place.
       const configObject = decoratorArgs[0];
-      const configText = configObject.getText();
+      const configStart = configObject.getStart(sourceFile);
+      const configEnd = configObject.getEnd();
+      const configText = originalText.slice(configStart, configEnd);
 
-      // Add NestScrambleModule to imports array
-      let newConfigText = configText;
-      
+      let newConfigText: string;
       if (configText.includes('imports:')) {
         // Add to existing imports array
         newConfigText = configText.replace(
@@ -194,11 +202,25 @@ async function runInit(options: { module: string }): Promise<void> {
         );
       }
 
-      configObject.replaceWithText(newConfigText);
+      // Add the import after the last existing import statement.
+      console.log('📝 Adding import statement...');
+      const importStatements = sourceFile.statements.filter(ts.isImportDeclaration);
+      const importInsertAt =
+        importStatements.length > 0
+          ? importStatements[importStatements.length - 1].getEnd()
+          : 0;
+      const importLine = "import { NestScrambleModule } from 'nest-scramble';";
+
+      const patchedText =
+        originalText.slice(0, importInsertAt) +
+        (importStatements.length > 0 ? '\n' + importLine : importLine + '\n') +
+        originalText.slice(importInsertAt, configStart) +
+        newConfigText +
+        originalText.slice(configEnd);
 
       // Save the file
       console.log('💾 Saving changes...');
-      await sourceFile.save();
+      fs.writeFileSync(modulePath, patchedText);
 
       console.log('\n' + '='.repeat(60));
       console.log('✅ Nest-Scramble successfully injected!');

@@ -62,9 +62,6 @@
     "url": "https://github.com/Eng-MMustafa"
   },
   "license": "MIT",
-  "dependencies": {
-    "ts-morph": "^21.0.1"
-  },
   "devDependencies": {
     "@nestjs/platform-express": "^10.4.22",
     "@nestjs/platform-fastify": "^10.4.22",

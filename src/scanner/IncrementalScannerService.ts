@@ -1,5 +1,6 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
-import { Project } from 'ts-morph';
+import * as ts from 'typescript';
+import { TsProject } from '../analysis/TsProject';
 import { CacheManager } from '../cache/CacheManager';
 import { DependencyTracker } from '../tracker/DependencyTracker';
 import { FileChangeEvent } from '../watcher/FileWatcher';
@@ -33,7 +34,7 @@ export interface ScanOptions {
 }
 
 export class IncrementalScannerService {
-  private project: Project | null = null;
+  private project: TsProject | null = null;
   /**
    * Extraction is delegated so the incremental path and the normal path can
    * never disagree about what a controller looks like.
@@ -77,28 +78,21 @@ export class IncrementalScannerService {
   }
 
   /**
-   * Initialize ts-morph project
+   * Initialize the TypeScript project
    */
   private initializeProject(): void {
     try {
       if (!fs.existsSync(this.tsconfigPath)) {
         ScrambleLogger.warn(`[IncrementalScanner] tsconfig.json not found, creating project without config`);
-        this.project = new Project({
-          skipAddingFilesFromTsConfig: true,
-        });
+        this.project = new TsProject();
       } else {
-        this.project = new Project({
-          tsConfigFilePath: this.tsconfigPath,
-          skipAddingFilesFromTsConfig: true,
-        });
+        this.project = new TsProject(this.tsconfigPath);
       }
 
       this.dependencyTracker = new DependencyTracker(this.project);
     } catch (error) {
       ScrambleLogger.error(`[IncrementalScanner] Error initializing project:`, error);
-      this.project = new Project({
-        skipAddingFilesFromTsConfig: true,
-      });
+      this.project = new TsProject();
       this.dependencyTracker = new DependencyTracker(this.project);
     }
   }
@@ -142,9 +136,7 @@ export class IncrementalScannerService {
     ScrambleLogger.info(`[IncrementalScanner] Starting full scan...`);
 
     try {
-      // ts-morph globs use forward slashes even on Windows.
-      const pattern = `${this.sourcePath.replace(/\\/g, '/')}/**/*.ts`;
-      this.project.addSourceFilesAtPaths(pattern);
+      this.project.addSourceFilesInDirectory(this.sourcePath);
     } catch (error) {
       ScrambleLogger.error(`[IncrementalScanner] Error adding source files:`, error);
       return [];
@@ -157,7 +149,7 @@ export class IncrementalScannerService {
     const controllerPaths: string[] = [];
 
     for (const sourceFile of sourceFiles) {
-      const filePath = sourceFile.getFilePath();
+      const filePath = sourceFile.fileName;
       const found = this.scanFileAll(filePath);
 
       if (found.length > 0) {
@@ -215,7 +207,7 @@ export class IncrementalScannerService {
     }
 
     let sourceFile = this.project.getSourceFile(normalizedPath);
-    
+
     if (!sourceFile) {
       try {
         sourceFile = this.project.addSourceFileAtPath(normalizedPath);
@@ -224,11 +216,19 @@ export class IncrementalScannerService {
         return [];
       }
     } else {
-      sourceFile.refreshFromFileSystemSync();
+      // A rebuild of the underlying program re-reads changed files from disk.
+      this.project.refresh();
+      sourceFile = this.project.getSourceFile(normalizedPath);
+      if (!sourceFile) {
+        return [];
+      }
     }
 
-    const controllerClasses = sourceFile
-      .getClasses()
+    // The extractor resolves DTO types through the current program's checker.
+    this.scanner.useChecker(this.project.getChecker());
+
+    const controllerClasses = sourceFile.statements
+      .filter(ts.isClassDeclaration)
       .filter(cls => this.scanner.hasControllerDecorator(cls));
 
     if (controllerClasses.length === 0) {
@@ -336,10 +336,7 @@ export class IncrementalScannerService {
       this.dependencyTracker.removeDependency(filePath);
     }
 
-    const sourceFile = this.project?.getSourceFile(filePath);
-    if (sourceFile) {
-      this.project?.removeSourceFile(sourceFile);
-    }
+    this.project?.removeSourceFile(filePath);
   }
 
   /**
@@ -372,7 +369,7 @@ export class IncrementalScannerService {
   /**
    * Get project instance
    */
-  getProject(): Project | null {
+  getProject(): TsProject | null {
     return this.project;
   }
 
@@ -381,16 +378,15 @@ export class IncrementalScannerService {
    */
   cleanup(): void {
     ScrambleLogger.info('[IncrementalScanner] Cleaning up resources...');
-    
+
     this.cacheManager.save();
-    
+
     if (this.project) {
-      const sourceFiles = this.project.getSourceFiles();
-      for (const sourceFile of sourceFiles) {
-        this.project.removeSourceFile(sourceFile);
+      for (const sourceFile of this.project.getSourceFiles()) {
+        this.project.removeSourceFile(sourceFile.fileName);
       }
     }
-    
+
     this.isInitialized = false;
   }
 

@@ -1,6 +1,7 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
-import { ClassDeclaration, InterfaceDeclaration, Node, PropertyDeclaration, Type } from 'ts-morph';
+import * as ts from 'typescript';
 import { extractValidationConstraints, ValidationConstraints } from './ValidationExtractor';
+import { getJsDocInfo } from '../analysis/AstHelpers';
 
 export interface AnalyzedType {
   type: string;
@@ -22,14 +23,16 @@ export interface PropertyInfo {
 export class DtoAnalyzer {
   private visited = new Set<string>();
 
+  constructor(private readonly checker: ts.TypeChecker) {}
+
   /**
    * Analyzes a TypeScript type and returns detailed information
    * @param type The TypeScript type to analyze
    * @param isOptional Whether the type is optional
    * @returns AnalyzedType with full type information
    */
-  analyzeType(type: Type, isOptional = false): AnalyzedType {
-    const typeText = type.getText();
+  analyzeType(type: ts.Type, isOptional = false): AnalyzedType {
+    const typeText = this.typeText(type);
 
     // Prevent circular references
     if (this.visited.has(typeText)) {
@@ -47,38 +50,40 @@ export class DtoAnalyzer {
 
       // Unwrap Promise<T> to get T
       if (typeText.startsWith('Promise<') && typeText.endsWith('>')) {
-        const typeArgs = type.getTypeArguments();
+        const typeArgs = this.typeArguments(type);
         if (typeArgs.length > 0) {
           return this.analyzeType(typeArgs[0], isOptional);
         }
       }
 
       // Check if it's an array
-      const arrayElementType = type.getArrayElementType();
-      if (arrayElementType) {
-        const elementAnalysis = this.analyzeType(arrayElementType);
-        return {
-          type: elementAnalysis.type || typeText,
-          isArray: true,
-          isOptional,
-          properties: elementAnalysis.properties,
-        };
+      if (this.checker.isArrayType(type)) {
+        const elementType = this.typeArguments(type)[0];
+        if (elementType) {
+          const elementAnalysis = this.analyzeType(elementType);
+          return {
+            type: elementAnalysis.type || typeText,
+            isArray: true,
+            isOptional,
+            properties: elementAnalysis.properties,
+          };
+        }
       }
 
       // Check if it's an enum
       if (symbol) {
-        const declarations = symbol.getDeclarations();
+        const declarations = symbol.getDeclarations() ?? [];
         for (const decl of declarations) {
-          if (Node.isEnumDeclaration(decl)) {
-            const enumValues = decl.getMembers().map(member => {
-              const initializer = member.getInitializer();
-              if (initializer && Node.isStringLiteral(initializer)) {
-                return initializer.getLiteralValue();
+          if (ts.isEnumDeclaration(decl)) {
+            const enumValues = decl.members.map(member => {
+              const initializer = member.initializer;
+              if (initializer && ts.isStringLiteral(initializer)) {
+                return initializer.text;
               }
-              return member.getName();
+              return member.name.getText();
             });
             return {
-              type: decl.getName() || symbol.getName() || typeText,
+              type: decl.name.text || symbol.getName() || typeText,
               isArray: false,
               isOptional,
               enumValues,
@@ -88,12 +93,14 @@ export class DtoAnalyzer {
       }
 
       // Check if it's a union type
-      const unionTypes = type.getUnionTypes();
+      const unionTypes = type.isUnion() ? type.types : [];
       if (unionTypes.length > 1) {
         // `prop?: AddressDto` widens to `AddressDto | undefined`. Without
         // stripping the nullish members the DTO name is lost, which produced
         // `oneOf` noise in the OpenAPI schema and untyped client properties.
-        const meaningful = unionTypes.filter(t => !t.isUndefined() && !t.isNull());
+        const meaningful = unionTypes.filter(
+          t => !(t.flags & ts.TypeFlags.Undefined) && !(t.flags & ts.TypeFlags.Null),
+        );
 
         if (meaningful.length === 1) {
           this.visited.delete(typeText);
@@ -103,16 +110,16 @@ export class DtoAnalyzer {
         // Check if it's a string literal union (acts like an enum)
         const literalValues: string[] = [];
         let allLiterals = true;
-        
+
         for (const unionType of unionTypes) {
           if (unionType.isStringLiteral()) {
-            literalValues.push(unionType.getLiteralValue() as string);
+            literalValues.push(unionType.value);
           } else {
             allLiterals = false;
             break;
           }
         }
-        
+
         if (allLiterals && literalValues.length > 0) {
           return {
             type: 'string',
@@ -121,23 +128,23 @@ export class DtoAnalyzer {
             enumValues: literalValues,
           };
         }
-        
+
         return {
           type: typeText,
           isArray: false,
           isOptional,
-          unionTypes: unionTypes.map(t => t.getText()),
+          unionTypes: unionTypes.map(t => this.typeText(t)),
         };
       }
 
       // Check if it's a class or interface
       if (symbol) {
-        const declarations = symbol.getDeclarations();
+        const declarations = symbol.getDeclarations() ?? [];
         for (const decl of declarations) {
-          if (Node.isClassDeclaration(decl) || Node.isInterfaceDeclaration(decl)) {
+          if (ts.isClassDeclaration(decl) || ts.isInterfaceDeclaration(decl)) {
             const properties = this.extractProperties(decl);
             // Use the class/interface name instead of full type text
-            const className = decl.getName() || symbol.getName() || typeText;
+            const className = decl.name?.text || symbol.getName() || typeText;
             return {
               type: className,
               isArray: false,
@@ -159,22 +166,49 @@ export class DtoAnalyzer {
     }
   }
 
-  private extractProperties(decl: ClassDeclaration | InterfaceDeclaration): PropertyInfo[] {
+  /** The type of a node, resolved through the checker. */
+  typeOf(node: ts.Node): ts.Type {
+    return this.checker.getTypeAtLocation(node);
+  }
+
+  /** The return type of a method, resolved through its signature. */
+  returnTypeOf(method: ts.SignatureDeclaration): ts.Type {
+    const signature = this.checker.getSignatureFromDeclaration(method);
+    return signature
+      ? this.checker.getReturnTypeOfSignature(signature)
+      : this.checker.getTypeAtLocation(method);
+  }
+
+  private typeText(type: ts.Type): string {
+    return this.checker.typeToString(type, undefined, ts.TypeFormatFlags.NoTruncation);
+  }
+
+  private typeArguments(type: ts.Type): readonly ts.Type[] {
+    if (!(type.flags & ts.TypeFlags.Object)) return [];
+    const objectType = type as ts.ObjectType;
+    if (!(objectType.objectFlags & ts.ObjectFlags.Reference)) return [];
+    return this.checker.getTypeArguments(type as ts.TypeReference);
+  }
+
+  private extractProperties(decl: ts.ClassDeclaration | ts.InterfaceDeclaration): PropertyInfo[] {
     const properties: PropertyInfo[] = [];
 
-    const propDeclarations = decl.getProperties();
-    for (const prop of propDeclarations) {
-      const name = prop.getName();
-      const type = prop.getType();
+    for (const member of decl.members) {
+      if (!ts.isPropertyDeclaration(member) && !ts.isPropertySignature(member)) {
+        continue;
+      }
+
+      const name = member.name.getText();
+      const type = this.checker.getTypeAtLocation(member);
 
       // Interface members have no decorators; only class properties do.
-      const validation = Node.isPropertyDeclaration(prop)
-        ? extractValidationConstraints(prop as PropertyDeclaration)
+      const validation = ts.isPropertyDeclaration(member)
+        ? extractValidationConstraints(member)
         : undefined;
 
       // `@IsOptional()` and `@IsNotEmpty()` override the `?` marker, because the
       // validation pipe, not the TypeScript type, decides what the API accepts.
-      let isOptional = prop.hasQuestionToken ? prop.hasQuestionToken() : false;
+      let isOptional = member.questionToken !== undefined;
       if (validation?.explicitlyOptional) {
         isOptional = true;
       } else if (validation?.explicitlyRequired) {
@@ -188,14 +222,7 @@ export class DtoAnalyzer {
       analyzedType.isOptional = isOptional;
 
       // Extract JSDoc description
-      const jsDocs = prop.getJsDocs();
-      let description: string | undefined;
-      if (jsDocs.length > 0) {
-        const comment = jsDocs[0].getDescription().trim();
-        if (comment) {
-          description = comment;
-        }
-      }
+      const description = getJsDocInfo(member).description;
 
       properties.push({
         name,

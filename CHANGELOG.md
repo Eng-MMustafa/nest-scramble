@@ -9,12 +9,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 ## [Unreleased]
 
 ### Changed
-- **Two of the three runtime dependencies are gone.** `@faker-js/faker` powered
-  fourteen simple value generators behind the mock server; a built-in pool of
-  curated names, words and places produces the same field-name-aware mocks.
-  `commander` parsed three subcommands and a dozen flags; a hundred-line parser
-  now does, verified by the same CLI e2e suite. A production install drops from
-  59.8 MB to 50.0 MB, and only `ts-morph` remains.
+- **Zero runtime dependencies.** All three are gone:
+  - `@faker-js/faker` powered fourteen simple value generators behind the mock
+    server; a built-in pool of curated names, words and places produces the same
+    field-name-aware mocks.
+  - `commander` parsed three subcommands and a dozen flags; a hundred-line
+    parser now does, verified by the same CLI e2e suite.
+  - `ts-morph` — the core of the scanner — bundled a second copy of the
+    TypeScript compiler. The scanner, DTO analyzer, validation and upload
+    extractors, dependency tracker and `init` command now drive the
+    `typescript` compiler API directly, which every NestJS project already has
+    as a peer dependency.
+
+  In a NestJS project, installing this package now adds ~0.8 MB and **no other
+  packages**. A bare production install (peers included) drops from 59.8 MB /
+  49 packages to 36.4 MB / 23 packages.
+- **Scanner internals now speak `ts.Node` instead of ts-morph wrappers.** The
+  signatures of `ScannerService.extractControllerInfo`, `DtoAnalyzer`,
+  `extractValidationConstraints`, `extractFileFields` and `DependencyTracker`
+  take `typescript` AST nodes. `scanControllers(sourcePath)` and every generated
+  artifact are unchanged.
 
 ---
 

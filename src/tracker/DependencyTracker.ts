@@ -1,5 +1,6 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
-import { Project, SourceFile, Node } from 'ts-morph';
+import * as ts from 'typescript';
+import { TsProject } from '../analysis/TsProject';
 import { ScrambleLogger } from '../utils/ScrambleLogger';
 import * as path from 'path';
 
@@ -12,12 +13,12 @@ export interface DependencyInfo {
 }
 
 export class DependencyTracker {
-  private project: Project;
+  private project: TsProject;
   private dependencyGraph: Map<string, Set<string>> = new Map();
   private reverseDependencyGraph: Map<string, Set<string>> = new Map();
   private inheritanceGraph: Map<string, Set<string>> = new Map();
 
-  constructor(project: Project) {
+  constructor(project: TsProject) {
     this.project = project;
   }
 
@@ -31,13 +32,14 @@ export class DependencyTracker {
     }
 
     const dependencies = new Set<string>();
-    
+
     // Extract import declarations
-    const imports = sourceFile.getImportDeclarations();
-    
-    for (const importDecl of imports) {
-      const moduleSpecifier = importDecl.getModuleSpecifierValue();
-      
+    for (const statement of sourceFile.statements) {
+      if (!ts.isImportDeclaration(statement)) continue;
+      if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
+
+      const moduleSpecifier = statement.moduleSpecifier.text;
+
       // Skip node_modules imports
       if (!moduleSpecifier.startsWith('.') && !moduleSpecifier.startsWith('/')) {
         continue;
@@ -67,108 +69,75 @@ export class DependencyTracker {
   /**
    * Extract inheritance dependencies (extends, implements)
    */
-  private extractInheritanceDependencies(sourceFile: SourceFile): Set<string> {
+  private extractInheritanceDependencies(sourceFile: ts.SourceFile): Set<string> {
     const inheritanceDeps = new Set<string>();
-    const normalizedPath = path.normalize(sourceFile.getFilePath());
-    
+    const normalizedPath = path.normalize(sourceFile.fileName);
+    const checker = this.project.getChecker();
+
     // Track inheritance for this file
     const inheritanceChain = new Set<string>();
-    
-    // Check classes
-    const classes = sourceFile.getClasses();
-    for (const cls of classes) {
-      // Check extends clause
-      const extendsClause = cls.getExtends();
-      if (extendsClause) {
-        const baseType = extendsClause.getType();
-        const baseSymbol = baseType.getSymbol();
-        if (baseSymbol) {
-          const declarations = baseSymbol.getDeclarations();
-          for (const decl of declarations) {
-            const declFile = decl.getSourceFile().getFilePath();
-            if (!declFile.includes('node_modules')) {
-              const normalizedDeclPath = path.normalize(declFile);
-              inheritanceDeps.add(normalizedDeclPath);
-              inheritanceChain.add(normalizedDeclPath);
-            }
-          }
+
+    const recordHeritageType = (expression: ts.ExpressionWithTypeArguments): void => {
+      const type = checker.getTypeAtLocation(expression);
+      const symbol = type.getSymbol() ?? type.aliasSymbol;
+      if (!symbol) return;
+
+      for (const decl of symbol.getDeclarations() ?? []) {
+        const declFile = decl.getSourceFile().fileName;
+        if (!declFile.includes('node_modules')) {
+          const normalizedDeclPath = path.normalize(declFile);
+          inheritanceDeps.add(normalizedDeclPath);
+          inheritanceChain.add(normalizedDeclPath);
         }
       }
-      
-      // Check implements clause
-      const implementsClauses = cls.getImplements();
-      for (const impl of implementsClauses) {
-        const implType = impl.getType();
-        const implSymbol = implType.getSymbol();
-        if (implSymbol) {
-          const declarations = implSymbol.getDeclarations();
-          for (const decl of declarations) {
-            const declFile = decl.getSourceFile().getFilePath();
-            if (!declFile.includes('node_modules')) {
-              const normalizedDeclPath = path.normalize(declFile);
-              inheritanceDeps.add(normalizedDeclPath);
-              inheritanceChain.add(normalizedDeclPath);
-            }
-          }
+    };
+
+    // Classes: extends and implements. Interfaces: extends.
+    for (const statement of sourceFile.statements) {
+      if (!ts.isClassDeclaration(statement) && !ts.isInterfaceDeclaration(statement)) {
+        continue;
+      }
+
+      for (const clause of statement.heritageClauses ?? []) {
+        for (const heritageType of clause.types) {
+          recordHeritageType(heritageType);
         }
       }
     }
-    
-    // Check interfaces
-    const interfaces = sourceFile.getInterfaces();
-    for (const iface of interfaces) {
-      const extendsClauses = iface.getExtends();
-      for (const ext of extendsClauses) {
-        const extType = ext.getType();
-        const extSymbol = extType.getSymbol();
-        if (extSymbol) {
-          const declarations = extSymbol.getDeclarations();
-          for (const decl of declarations) {
-            const declFile = decl.getSourceFile().getFilePath();
-            if (!declFile.includes('node_modules')) {
-              const normalizedDeclPath = path.normalize(declFile);
-              inheritanceDeps.add(normalizedDeclPath);
-              inheritanceChain.add(normalizedDeclPath);
-            }
-          }
-        }
-      }
-    }
-    
+
     // Store inheritance chain
     if (inheritanceChain.size > 0) {
       this.inheritanceGraph.set(normalizedPath, inheritanceChain);
     }
-    
+
     return inheritanceDeps;
   }
 
   /**
    * Extract type references from a source file
    */
-  private extractTypeReferences(sourceFile: SourceFile): Set<string> {
+  private extractTypeReferences(sourceFile: ts.SourceFile): Set<string> {
     const typeRefs = new Set<string>();
-    
-    sourceFile.forEachDescendant((node) => {
-      if (Node.isTypeReference(node)) {
-        const typeName = node.getTypeName();
-        if (Node.isIdentifier(typeName)) {
-          const symbol = typeName.getSymbol();
-          if (symbol) {
-            const declarations = symbol.getDeclarations();
-            for (const decl of declarations) {
-              const declSourceFile = decl.getSourceFile();
-              const declPath = declSourceFile.getFilePath();
-              
-              // Only track local files, not node_modules
-              if (!declPath.includes('node_modules')) {
-                typeRefs.add(path.normalize(declPath));
-              }
+    const checker = this.project.getChecker();
+
+    const visit = (node: ts.Node): void => {
+      if (ts.isTypeReferenceNode(node) && ts.isIdentifier(node.typeName)) {
+        const symbol = checker.getSymbolAtLocation(node.typeName);
+        if (symbol) {
+          for (const decl of symbol.getDeclarations() ?? []) {
+            const declPath = decl.getSourceFile().fileName;
+
+            // Only track local files, not node_modules
+            if (!declPath.includes('node_modules')) {
+              typeRefs.add(path.normalize(declPath));
             }
           }
         }
       }
-    });
+      ts.forEachChild(node, visit);
+    };
+
+    visit(sourceFile);
 
     return typeRefs;
   }
@@ -176,9 +145,9 @@ export class DependencyTracker {
   /**
    * Resolve import path to absolute file path
    */
-  private resolveImportPath(sourceFile: SourceFile, moduleSpecifier: string): string | null {
+  private resolveImportPath(sourceFile: ts.SourceFile, moduleSpecifier: string): string | null {
     try {
-      const sourceDir = path.dirname(sourceFile.getFilePath());
+      const sourceDir = path.dirname(sourceFile.fileName);
       const resolvedPath = path.resolve(sourceDir, moduleSpecifier);
       
       // Try different extensions

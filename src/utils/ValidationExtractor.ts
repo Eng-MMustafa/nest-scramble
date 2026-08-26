@@ -1,5 +1,6 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
-import { Node, PropertyDeclaration, SyntaxKind } from 'ts-morph';
+import * as ts from 'typescript';
+import { getDecoratorArguments, getDecoratorName, getDecorators, numericLiteralValue } from '../analysis/AstHelpers';
 
 /**
  * OpenAPI-shaped constraints recovered from `class-validator` decorators.
@@ -53,38 +54,29 @@ const FORMAT_DECORATORS: Record<string, string> = {
 };
 
 /** Reads a numeric decorator argument, if it is a literal. */
-function numericArg(args: Node[], index: number): number | undefined {
+function numericArg(args: readonly ts.Expression[], index: number): number | undefined {
   const arg = args[index];
   if (!arg) return undefined;
 
-  if (Node.isNumericLiteral(arg)) {
-    return arg.getLiteralValue();
-  }
-
   // Handles negative literals such as `@Min(-1)`, which parse as a prefix
   // unary expression rather than a numeric literal.
-  if (Node.isPrefixUnaryExpression(arg)) {
-    const operand = arg.getOperand();
-    if (Node.isNumericLiteral(operand)) {
-      const value = operand.getLiteralValue();
-      return arg.getOperatorToken() === SyntaxKind.MinusToken ? -value : value;
-    }
-  }
-
-  return undefined;
+  return numericLiteralValue(arg);
 }
 
 /** Reads the members of an array literal argument, if they are literals. */
-function literalArrayArg(args: Node[], index: number): (string | number)[] | undefined {
+function literalArrayArg(
+  args: readonly ts.Expression[],
+  index: number,
+): (string | number)[] | undefined {
   const arg = args[index];
-  if (!arg || !Node.isArrayLiteralExpression(arg)) return undefined;
+  if (!arg || !ts.isArrayLiteralExpression(arg)) return undefined;
 
   const values: (string | number)[] = [];
-  for (const element of arg.getElements()) {
-    if (Node.isStringLiteral(element)) {
-      values.push(element.getLiteralValue());
-    } else if (Node.isNumericLiteral(element)) {
-      values.push(element.getLiteralValue());
+  for (const element of arg.elements) {
+    if (ts.isStringLiteral(element)) {
+      values.push(element.text);
+    } else if (ts.isNumericLiteral(element)) {
+      values.push(Number(element.text));
     } else {
       return undefined;
     }
@@ -94,19 +86,18 @@ function literalArrayArg(args: Node[], index: number): (string | number)[] | und
 }
 
 /** Extracts the source text of a regular expression argument. */
-function regexArg(args: Node[], index: number): string | undefined {
+function regexArg(args: readonly ts.Expression[], index: number): string | undefined {
   const arg = args[index];
   if (!arg) return undefined;
 
-  if (Node.isRegularExpressionLiteral(arg)) {
+  if (ts.isRegularExpressionLiteral(arg)) {
     // `/^ab+c$/i` -> `^ab+c$`; OpenAPI patterns carry no delimiters or flags.
-    const text = arg.getLiteralText();
-    const match = /^\/(.*)\/[a-z]*$/s.exec(text);
+    const match = /^\/(.*)\/[a-z]*$/s.exec(arg.text);
     return match ? match[1] : undefined;
   }
 
-  if (Node.isStringLiteral(arg)) {
-    return arg.getLiteralValue();
+  if (ts.isStringLiteral(arg)) {
+    return arg.text;
   }
 
   return undefined;
@@ -117,14 +108,14 @@ function regexArg(args: Node[], index: number): string | undefined {
  * a DTO property. Unknown decorators are ignored rather than guessed.
  */
 export function extractValidationConstraints(
-  prop: PropertyDeclaration,
+  prop: ts.PropertyDeclaration,
 ): ValidationConstraints | undefined {
   const constraints: ValidationConstraints = {};
   let found = false;
 
-  for (const decorator of prop.getDecorators()) {
-    const name = decorator.getName();
-    const args = decorator.getCallExpression()?.getArguments() ?? [];
+  for (const decorator of getDecorators(prop)) {
+    const name = getDecoratorName(decorator) ?? '';
+    const args = getDecoratorArguments(decorator);
 
     const format = FORMAT_DECORATORS[name];
     if (format) {

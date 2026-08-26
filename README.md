@@ -23,6 +23,7 @@ npx nest-scramble init
 npm run start:dev        # → http://localhost:3000/docs
 ```
 
+- **Zero runtime dependencies** — in a NestJS project, installing this package adds nothing but this package
 - **Docs UI** — interactive dashboard at `/docs`, dark and light themes
 - **OpenAPI 3.0** — served at `/docs-json`, or written to a file from the CLI
 - **Typed client SDK** — real interfaces from your DTOs, native `fetch`, zero runtime deps
