@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [Unreleased]
+
+### Changed
+- **Two of the three runtime dependencies are gone.** `@faker-js/faker` powered
+  fourteen simple value generators behind the mock server; a built-in pool of
+  curated names, words and places produces the same field-name-aware mocks.
+  `commander` parsed three subcommands and a dozen flags; a hundred-line parser
+  now does, verified by the same CLI e2e suite. A production install drops from
+  59.8 MB to 50.0 MB, and only `ts-morph` remains.
+
+---
+
 ## [4.0.2] - 2026-08-25
 
 ### Changed

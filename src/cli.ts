@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
 
-import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PostmanCollectionGenerator } from './generators/PostmanCollectionGenerator';
@@ -11,38 +10,55 @@ import { OpenApiTransformer } from './utils/OpenApiTransformer';
 import { diffSpecs } from './diff/SpecDiff';
 import { DiffFormat, formatDiff } from './diff/DiffFormatter';
 import { ScrambleLogger } from './utils/ScrambleLogger';
+import { CliUsageError, CommandDef, formatHelp, parseCommand } from './utils/CliParser';
 
 const packageJson = require('../package.json');
 
-const program = new Command();
+const generateCommand: CommandDef = {
+  name: 'generate',
+  description: 'Generate API documentation from NestJS project',
+  positionals: ['sourcePath'],
+  options: [
+    { key: 'output', long: '--output', short: '-o', placeholder: '<file>', default: 'openapi.json', description: 'Output file path' },
+    { key: 'format', long: '--format', short: '-f', placeholder: '<type>', default: 'openapi', description: 'Output format: openapi, postman, or client' },
+    { key: 'baseUrl', long: '--baseUrl', short: '-b', placeholder: '<url>', default: 'http://localhost:3000', description: 'Base URL for the API' },
+    { key: 'title', long: '--title', short: '-t', placeholder: '<title>', default: 'NestJS API', description: 'API title' },
+    { key: 'apiVersion', long: '--apiVersion', short: '-v', placeholder: '<version>', default: '1.0.0', description: 'API version' },
+    { key: 'globalPrefix', long: '--globalPrefix', short: '-p', placeholder: '<prefix>', default: '', description: 'Value passed to app.setGlobalPrefix(), prepended to every path' },
+  ],
+};
 
-program
-  .name('nest-scramble')
-  .description('Zero-config API Documentation & Postman Generator for NestJS')
-  .version(packageJson.version);
+const initCommand: CommandDef = {
+  name: 'init',
+  description: 'Auto-inject Nest-Scramble into your NestJS project',
+  positionals: [],
+  options: [
+    { key: 'module', long: '--module', short: '-m', placeholder: '<path>', default: 'src/app.module.ts', description: 'Path to your app module' },
+  ],
+};
 
-program
-  .command('generate')
-  .description('Generate API documentation from NestJS project')
-  .argument('<sourcePath>', 'Path to the source directory (e.g., src)')
-  .option('-o, --output <file>', 'Output file path', 'openapi.json')
-  .option('-f, --format <type>', 'Output format: openapi, postman, or client', 'openapi')
-  .option('-b, --baseUrl <url>', 'Base URL for the API', 'http://localhost:3000')
-  .option('-t, --title <title>', 'API title', 'NestJS API')
-  .option('-v, --apiVersion <version>', 'API version', '1.0.0')
-  .option(
-    '-p, --globalPrefix <prefix>',
-    'Value passed to app.setGlobalPrefix(), prepended to every path',
-    '',
-  )
-  .action(async (sourcePath: string, options: { 
-    output: string; 
-    format: string;
-    baseUrl: string;
-    title: string;
-    apiVersion: string;
-    globalPrefix: string;
-  }) => {
+const diffCommand: CommandDef = {
+  name: 'diff',
+  description: 'Compare two versions of your API and classify what changed',
+  positionals: ['base', 'head'],
+  options: [
+    { key: 'format', long: '--format', short: '-f', placeholder: '<type>', default: 'text', description: 'Output format: text, json, or markdown' },
+    { key: 'output', long: '--output', short: '-o', placeholder: '<file>', default: '', description: 'Write the report to a file instead of stdout' },
+    { key: 'failOnBreaking', long: '--fail-on-breaking', boolean: true, description: 'Exit with code 1 when a breaking change is found' },
+    { key: 'globalPrefix', long: '--globalPrefix', short: '-p', placeholder: '<prefix>', default: '', description: 'Value passed to app.setGlobalPrefix(), applied when generating from source' },
+  ],
+};
+
+const COMMANDS = [generateCommand, initCommand, diffCommand];
+
+async function runGenerate(sourcePath: string, options: {
+  output: string;
+  format: string;
+  baseUrl: string;
+  title: string;
+  apiVersion: string;
+  globalPrefix: string;
+}): Promise<void> {
     try {
       console.log('\n' + '='.repeat(60));
       console.log('🚀 Nest-Scramble CLI');
@@ -96,13 +112,9 @@ program
       console.error('   - Verify your controllers use @Controller() decorator\n');
       process.exit(1);
     }
-  });
+}
 
-program
-  .command('init')
-  .description('Auto-inject Nest-Scramble into your NestJS project')
-  .option('-m, --module <path>', 'Path to your app module', 'src/app.module.ts')
-  .action(async (options: { module: string }) => {
+async function runInit(options: { module: string }): Promise<void> {
     try {
       console.log('\n' + '='.repeat(60));
       console.log('🚀 Nest-Scramble Auto-Injector');
@@ -204,7 +216,7 @@ program
       console.error('   3. Done! 🚀\n');
       process.exit(1);
     }
-  });
+}
 
 /**
  * Loads an OpenAPI document from either a spec file or a source directory.
@@ -225,25 +237,11 @@ function loadSpec(target: string, globalPrefix: string): Record<string, any> {
   return JSON.parse(fs.readFileSync(target, 'utf-8'));
 }
 
-program
-  .command('diff')
-  .description('Compare two versions of your API and classify what changed')
-  .argument('<base>', 'Baseline: an OpenAPI JSON file or a source directory')
-  .argument('<head>', 'Candidate: an OpenAPI JSON file or a source directory')
-  .option('-f, --format <type>', 'Output format: text, json, or markdown', 'text')
-  .option('-o, --output <file>', 'Write the report to a file instead of stdout')
-  .option('--fail-on-breaking', 'Exit with code 1 when a breaking change is found', false)
-  .option(
-    '-p, --globalPrefix <prefix>',
-    'Value passed to app.setGlobalPrefix(), applied when generating from source',
-    '',
-  )
-  .action(
-    (
-      base: string,
-      head: string,
-      options: { format: string; output?: string; failOnBreaking: boolean; globalPrefix: string },
-    ) => {
+function runDiff(
+  base: string,
+  head: string,
+  options: { format: string; output?: string; failOnBreaking: boolean; globalPrefix: string },
+): void {
       try {
         // Keep stdout clean so the report can be piped.
         ScrambleLogger.configure('error');
@@ -268,7 +266,52 @@ program
         console.error('Error:', error instanceof Error ? error.message : error);
         process.exit(1);
       }
-    },
-  );
+}
 
-program.parse();
+async function main(): Promise<void> {
+  const argv = process.argv.slice(2);
+
+  if (argv.length === 0 || argv.includes('--help') || argv.includes('-h')) {
+    console.log(
+      formatHelp(
+        'nest-scramble',
+        'Zero-config API Documentation & Postman Generator for NestJS',
+        COMMANDS,
+      ),
+    );
+    return;
+  }
+
+  if (argv.includes('--version') || argv[0] === '-V') {
+    console.log(packageJson.version);
+    return;
+  }
+
+  const commandName = argv[0];
+  const def = COMMANDS.find((c) => c.name === commandName);
+
+  try {
+    if (!def) {
+      throw new CliUsageError(`unknown command '${commandName}'`);
+    }
+
+    const { positionals, options } = parseCommand(def, argv.slice(1));
+
+    if (def === generateCommand) {
+      await runGenerate(positionals[0], options as Parameters<typeof runGenerate>[1]);
+    } else if (def === initCommand) {
+      await runInit(options as Parameters<typeof runInit>[0]);
+    } else {
+      runDiff(positionals[0], positionals[1], options as Parameters<typeof runDiff>[2]);
+    }
+  } catch (error) {
+    if (error instanceof CliUsageError) {
+      console.error(`error: ${error.message}`);
+      console.error(`Run 'nest-scramble --help' for usage.`);
+      process.exit(1);
+    }
+    throw error;
+  }
+}
+
+main();
