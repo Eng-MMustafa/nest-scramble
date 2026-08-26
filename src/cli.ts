@@ -8,6 +8,9 @@ import { TypedClientGenerator } from './generators/TypedClientGenerator';
 import { ScannerService } from './scanner/ScannerService';
 import { OpenApiTransformer } from './utils/OpenApiTransformer';
 import { diffSpecs } from './diff/SpecDiff';
+import { diagnose, formatDoctorReport } from './doctor/DocsDoctor';
+import { formatApiChangelog } from './diff/ApiChangelog';
+import { formatScenarioResult, runScenario, Scenario } from './runner/ScenarioRunner';
 import { DiffFormat, formatDiff } from './diff/DiffFormatter';
 import { ScrambleLogger } from './utils/ScrambleLogger';
 import { CliUsageError, CommandDef, formatHelp, parseCommand } from './utils/CliParser';
@@ -50,7 +53,40 @@ const diffCommand: CommandDef = {
   ],
 };
 
-const COMMANDS = [generateCommand, initCommand, diffCommand];
+const doctorCommand: CommandDef = {
+  name: 'doctor',
+  description: 'Analyze documentation health and print a 0-100 score with actionable fixes',
+  positionals: ['sourcePath'],
+  options: [
+    { key: 'json', long: '--json', boolean: true, description: 'Output the report as JSON' },
+    { key: 'minScore', long: '--min-score', short: '-s', placeholder: '<n>', default: '', description: 'Exit with code 1 when the score is below this threshold (for CI)' },
+  ],
+};
+
+const changelogCommand: CommandDef = {
+  name: 'changelog',
+  description: 'Generate a consumer-facing Markdown changelog between two API versions',
+  positionals: ['base', 'head'],
+  options: [
+    { key: 'output', long: '--output', short: '-o', placeholder: '<file>', default: '', description: 'Write the changelog to a file instead of stdout' },
+    { key: 'fromLabel', long: '--from-label', placeholder: '<label>', default: '', description: 'Label for the old version (defaults to the base path)' },
+    { key: 'toLabel', long: '--to-label', placeholder: '<label>', default: '', description: 'Label for the new version (defaults to the head path)' },
+    { key: 'globalPrefix', long: '--globalPrefix', short: '-p', placeholder: '<prefix>', default: '', description: 'Value passed to app.setGlobalPrefix(), applied when generating from source' },
+  ],
+};
+
+const testCommand: CommandDef = {
+  name: 'test',
+  description: 'Run declarative API test scenarios (JSON) against a live server',
+  positionals: ['scenarioPath'],
+  options: [
+    { key: 'baseUrl', long: '--baseUrl', short: '-b', placeholder: '<url>', default: '', description: 'Base URL of the running API (overrides the scenario file)' },
+    { key: 'spec', long: '--spec', placeholder: '<path>', default: '', description: 'OpenAPI spec file or source directory for matchesSpec assertions' },
+    { key: 'globalPrefix', long: '--globalPrefix', short: '-p', placeholder: '<prefix>', default: '', description: 'Value passed to app.setGlobalPrefix(), applied when generating the spec from source' },
+  ],
+};
+
+const COMMANDS = [generateCommand, initCommand, diffCommand, doctorCommand, changelogCommand, testCommand];
 
 async function runGenerate(sourcePath: string, options: {
   output: string;
@@ -296,6 +332,114 @@ function runDiff(
       }
 }
 
+function runDoctor(sourcePath: string, options: { json: boolean; minScore: string }): void {
+  try {
+    ScrambleLogger.configure('error');
+
+    const controllers = new ScannerService().scanControllers(sourcePath);
+
+    if (controllers.length === 0) {
+      console.error('❌ No controllers found. Make sure your controllers use @Controller().');
+      process.exit(1);
+    }
+
+    const report = diagnose(controllers);
+
+    if (options.json) {
+      console.log(JSON.stringify(report, null, 2));
+    } else {
+      console.log(formatDoctorReport(report));
+    }
+
+    const threshold = options.minScore === '' ? undefined : Number(options.minScore);
+    if (threshold !== undefined && !Number.isNaN(threshold) && report.score < threshold) {
+      console.error(`\nScore ${report.score} is below the required minimum of ${threshold}.`);
+      process.exitCode = 1;
+    }
+  } catch (error) {
+    console.error('Error:', error instanceof Error ? error.message : error);
+    process.exit(1);
+  }
+}
+
+function runChangelog(
+  base: string,
+  head: string,
+  options: { output: string; fromLabel: string; toLabel: string; globalPrefix: string },
+): void {
+  try {
+    ScrambleLogger.configure('error');
+
+    const baseSpec = loadSpec(base, options.globalPrefix);
+    const headSpec = loadSpec(head, options.globalPrefix);
+
+    const result = diffSpecs(baseSpec, headSpec);
+    const changelog = formatApiChangelog(result, {
+      fromLabel: options.fromLabel || base,
+      toLabel: options.toLabel || head,
+    });
+
+    if (options.output) {
+      fs.writeFileSync(options.output, changelog);
+      console.log(`Changelog written to: ${options.output}`);
+    } else {
+      console.log(changelog);
+    }
+  } catch (error) {
+    console.error('Error:', error instanceof Error ? error.message : error);
+    process.exit(1);
+  }
+}
+
+/** Collects scenario files: a single file, or every `*.scenario.json` in a directory. */
+function collectScenarioFiles(target: string): string[] {
+  if (!fs.existsSync(target)) {
+    throw new Error(`Path not found: ${target}`);
+  }
+  if (fs.statSync(target).isFile()) return [target];
+
+  return fs
+    .readdirSync(target)
+    .filter((file) => file.endsWith('.scenario.json') || file.endsWith('.scenario'))
+    .map((file) => path.join(target, file))
+    .sort();
+}
+
+async function runTest(
+  scenarioPath: string,
+  options: { baseUrl: string; spec: string; globalPrefix: string },
+): Promise<void> {
+  try {
+    ScrambleLogger.configure('error');
+
+    const files = collectScenarioFiles(scenarioPath);
+    if (files.length === 0) {
+      console.error(`No scenario files (*.scenario.json) found in: ${scenarioPath}`);
+      process.exit(1);
+    }
+
+    const spec = options.spec ? loadSpec(options.spec, options.globalPrefix) : undefined;
+
+    let failed = 0;
+    for (const file of files) {
+      const scenario = JSON.parse(fs.readFileSync(file, 'utf-8')) as Scenario;
+      const result = await runScenario(scenario, {
+        baseUrl: options.baseUrl || undefined,
+        spec,
+      });
+      console.log(formatScenarioResult(result));
+      console.log('');
+      if (!result.passed) failed += 1;
+    }
+
+    console.log(`${files.length - failed}/${files.length} scenario(s) passed.`);
+    if (failed > 0) process.exitCode = 1;
+  } catch (error) {
+    console.error('Error:', error instanceof Error ? error.message : error);
+    process.exit(1);
+  }
+}
+
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
 
@@ -329,6 +473,12 @@ async function main(): Promise<void> {
       await runGenerate(positionals[0], options as Parameters<typeof runGenerate>[1]);
     } else if (def === initCommand) {
       await runInit(options as Parameters<typeof runInit>[0]);
+    } else if (def === doctorCommand) {
+      runDoctor(positionals[0], options as Parameters<typeof runDoctor>[1]);
+    } else if (def === changelogCommand) {
+      runChangelog(positionals[0], positionals[1], options as Parameters<typeof runChangelog>[2]);
+    } else if (def === testCommand) {
+      await runTest(positionals[0], options as Parameters<typeof runTest>[1]);
     } else {
       runDiff(positionals[0], positionals[1], options as Parameters<typeof runDiff>[2]);
     }

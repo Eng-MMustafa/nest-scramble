@@ -281,6 +281,15 @@ npx nest-scramble generate src --format client -o api-client.ts
 # Detect breaking API changes
 npx nest-scramble diff ./main-checkout/src ./src --fail-on-breaking
 
+# Documentation health check — 0-100 score with actionable fixes
+npx nest-scramble doctor src --min-score 80
+
+# Consumer-facing Markdown changelog between two API versions
+npx nest-scramble changelog ./v1-checkout/src ./src --to-label v2.0.0
+
+# Run declarative API test scenarios against a live server
+npx nest-scramble test scenarios/ --baseUrl http://localhost:3000 --spec src
+
 # Custom options
 npx nest-scramble generate src \
   -o my-api.json \
@@ -715,6 +724,39 @@ npm run build
 ```
 
 **When reporting an issue, include:** Nest-Scramble version, NestJS version, Node.js version, TypeScript version, startup log output.
+
+---
+
+## What's New in v5.2.0
+
+**The docs prove themselves now.** Opt-in drift detection
+(`enableDriftDetection: true`) samples real JSON responses in development and
+warns — once per finding — when the running API disagrees with the generated
+documentation: missing fields, unexpected fields, type mismatches, undocumented
+routes and statuses.
+
+**`nest-scramble doctor`.** A documentation health report scored 0–100: opaque
+return types, untyped parameters, missing JSDoc and unvalidated DTOs, each with
+the exact fix. `--min-score` turns it into a CI gate.
+
+**`nest-scramble test`.** Declarative JSON scenarios — chained requests,
+`{{variable}}` capture between steps, status and body assertions, and
+`matchesSpec` contract validation against the generated document. Zero
+dependencies, exit code for CI.
+
+**`nest-scramble changelog`.** A consumer-facing Markdown changelog between any
+two API versions (spec files or source checkouts), breaking changes first.
+
+**WebSocket support.** `@WebSocketGateway()` and `@SubscribeMessage()` handlers
+are scanned like controllers: payload and response DTOs become schemas, served
+at `/docs-ws-json`, and the docs UI grows a live WebSocket console — connect
+over Socket.IO (served by your own server, no CDN) or raw WebSocket, send
+events, watch live traffic.
+
+**Environments & share links in the docs UI.** Postman-style environments
+(base URL + `{{variables}}`, stored locally) and one-click share links that
+encode the whole request — URL, params, body — in the URL hash. Send a link,
+your teammate opens the exact same request.
 
 ---
 

@@ -5,6 +5,7 @@ import {
   Header,
   Inject,
   InternalServerErrorException,
+  Optional,
   SetMetadata,
   Type,
 } from '@nestjs/common';
@@ -39,6 +40,7 @@ export function createDocsController(config: { path?: string } = {}): Type<any> 
     constructor(
       @Inject('NEST_SCRAMBLE_OPENAPI') private openApiSpec: any,
       @Inject('NEST_SCRAMBLE_OPTIONS') private options: any,
+      @Optional() @Inject('NEST_SCRAMBLE_WS') private wsDocument: any,
     ) {}
 
     @Get(docsPath)
@@ -71,6 +73,17 @@ export function createDocsController(config: { path?: string } = {}): Type<any> 
     @Get(`${docsPath}/spec`)
     getOpenApiSpec() {
       return this.openApiSpec;
+    }
+
+    /**
+     * WebSocket gateway documentation. `gateways` is empty when the project
+     * has none, so the docs UI knows to hide the section.
+     */
+    @Get(`${docsPath}-ws-json`)
+    @Header('Content-Type', 'application/json; charset=utf-8')
+    @Header('Access-Control-Allow-Origin', '*')
+    getWsJson(): string {
+      return JSON.stringify(this.wsDocument || { gateways: [] }, null, 2);
     }
 
     /**

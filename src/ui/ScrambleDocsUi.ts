@@ -53,6 +53,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
     </div>
     <div class="topbar-actions">
       <input type="search" id="search" class="search" placeholder="Search requests…" autocomplete="off" />
+      <select id="env-select" class="env-select" title="Environment"></select>
       <button type="button" class="btn-ghost" id="auth-btn">🔑 Auth</button>
       <button type="button" class="btn-ghost" id="export-postman">⬇ Postman</button>
       <a class="btn-ghost" id="spec-link" href="${specUrl}" target="_blank" rel="noopener">OpenAPI</a>
@@ -74,6 +75,25 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
         <input id="auth-token" placeholder="token…" autocomplete="off" />
       </label>
       <div class="dim auth-note">Stored in your browser only. Requests can override it in their Auth tab.</div>
+    </div>
+    <div class="auth-pop env-pop" id="env-pop" hidden>
+      <div class="auth-title">Environments <span class="dim">(base URL + variables)</span></div>
+      <div class="env-list" id="env-list"></div>
+      <label class="auth-field"><span>Name</span>
+        <input id="env-name" placeholder="staging" autocomplete="off" />
+      </label>
+      <label class="auth-field"><span>Base URL <span class="dim">(optional — overrides the server URL)</span></span>
+        <input id="env-base" placeholder="https://staging.example.com" autocomplete="off" />
+      </label>
+      <label class="auth-field"><span>Variables <span class="dim">(KEY=value, one per line — use {{KEY}} anywhere)</span></span>
+        <textarea id="env-vars" rows="4" placeholder="userId=42&#10;token=abc" spellcheck="false"></textarea>
+      </label>
+      <div class="env-actions">
+        <button type="button" class="btn-add" id="env-save">Save</button>
+        <button type="button" class="btn-add" id="env-new">New</button>
+        <button type="button" class="btn-add env-delete" id="env-delete" hidden>Delete</button>
+      </div>
+      <div class="dim auth-note">Stored in your browser only.</div>
     </div>
   </header>
   <div class="layout">
@@ -117,6 +137,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
           <span class="method" id="req-method">GET</span>
           <input class="url-input" id="url-input" spellcheck="false" autocomplete="off" />
           <button type="button" class="btn-send" id="send-btn">Send</button>
+          <button type="button" class="btn-ghost btn-share" id="share-btn" title="Copy a shareable link to this request">🔗</button>
         </div>
         <div class="req-summary">
           <span id="req-summary-text" class="dim"></span>
@@ -162,6 +183,46 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
             <div class="resp-empty">Hit <b>Send</b> to see the response here.</div>
           </div>
           <div class="resp-panel" data-rpanel="headers" id="resp-headers" hidden></div>
+        </div>
+      </section>
+      <section id="ws-view" hidden>
+        <div class="crumbs">
+          <button type="button" class="crumb-link" id="ws-crumb-overview">Overview</button>
+          <span class="crumb-sep">›</span>
+          <span class="crumb" id="ws-crumb-gateway"></span>
+          <span class="crumb-sep">›</span>
+          <b class="crumb" id="ws-crumb-event"></b>
+        </div>
+        <div class="req-bar">
+          <span class="method method-ws">WS</span>
+          <input class="url-input" id="ws-url" spellcheck="false" autocomplete="off" />
+          <select id="ws-transport" class="raw-lang" title="Transport">
+            <option value="socketio">Socket.IO</option>
+            <option value="ws">Raw WebSocket</option>
+          </select>
+          <button type="button" class="btn-send" id="ws-connect">Connect</button>
+        </div>
+        <div class="req-summary">
+          <span id="ws-summary" class="dim"></span>
+          <span class="chip" id="ws-status">disconnected</span>
+        </div>
+        <div class="ws-compose">
+          <input id="ws-event-name" class="ws-event-input" placeholder="event" spellcheck="false" autocomplete="off" />
+          <button type="button" class="btn-send" id="ws-send" disabled>Send</button>
+        </div>
+        <textarea class="body-editor" id="ws-payload" rows="8" spellcheck="false"></textarea>
+        <div class="ws-doc" id="ws-doc"></div>
+        <div class="resp">
+          <div class="resp-head">
+            <div class="resp-tabs">
+              <span class="resp-title">Events</span>
+              <button type="button" class="btn-add" id="ws-clear">Clear</button>
+            </div>
+            <span class="resp-meta" id="ws-meta"></span>
+          </div>
+          <div class="resp-panel" id="ws-log">
+            <div class="resp-empty">Connect and send an event to see live traffic here.</div>
+          </div>
         </div>
       </section>
     </main>
@@ -287,6 +348,141 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
         event.stopPropagation();
         pop.hidden = !pop.hidden;
       });
+      pop.addEventListener('click', function (event) { event.stopPropagation(); });
+      document.addEventListener('click', function () { pop.hidden = true; });
+    })();
+
+    /* ------------------------------------------------------------------ *
+     * Environments (Postman-style: base URL + {{variables}}, persisted)
+     * ------------------------------------------------------------------ */
+
+    function getEnvs() {
+      try { return JSON.parse(store('scramble-envs') || '[]'); } catch (e) { return []; }
+    }
+
+    function saveEnvs(envs) { store('scramble-envs', JSON.stringify(envs)); }
+
+    function activeEnv() {
+      var name = store('scramble-env-active');
+      if (!name) return null;
+      var envs = getEnvs();
+      for (var i = 0; i < envs.length; i++) if (envs[i].name === name) return envs[i];
+      return null;
+    }
+
+    function parseVars(text) {
+      var vars = {};
+      String(text || '').split('\\n').forEach(function (line) {
+        var eq = line.indexOf('=');
+        if (eq > 0) vars[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+      });
+      return vars;
+    }
+
+    function varsText(vars) {
+      return Object.keys(vars || {}).map(function (key) { return key + '=' + vars[key]; }).join('\\n');
+    }
+
+    /** Replaces {{name}} placeholders with the active environment's variables. */
+    function applyVars(text) {
+      var env = activeEnv();
+      if (!env || !text) return text;
+      return String(text).replace(/\\{\\{\\s*([\\w.-]+)\\s*\\}\\}/g, function (match, key) {
+        return env.vars && env.vars[key] !== undefined ? env.vars[key] : match;
+      });
+    }
+
+    var envEditing = null;
+
+    function renderEnvSelect() {
+      var select = byId('env-select');
+      var activeName = store('scramble-env-active') || '';
+      var options = '<option value="">No environment</option>';
+      getEnvs().forEach(function (env) {
+        options += '<option value="' + esc(env.name) + '"' + (env.name === activeName ? ' selected' : '') + '>' + esc(env.name) + '</option>';
+      });
+      options += '<option value="__manage">⚙ Manage environments…</option>';
+      select.innerHTML = options;
+    }
+
+    function renderEnvList() {
+      var list = byId('env-list');
+      var envs = getEnvs();
+      if (!envs.length) {
+        list.innerHTML = '<div class="dim env-empty">No environments yet — create one below.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      envs.forEach(function (env) {
+        var row = el('<button type="button" class="env-item' + (envEditing === env.name ? ' active' : '') + '">' +
+          esc(env.name) + (env.baseUrl ? ' <span class="dim">' + esc(env.baseUrl) + '</span>' : '') +
+        '</button>');
+        row.addEventListener('click', function () {
+          envEditing = env.name;
+          byId('env-name').value = env.name;
+          byId('env-base').value = env.baseUrl || '';
+          byId('env-vars').value = varsText(env.vars);
+          byId('env-delete').hidden = false;
+          renderEnvList();
+        });
+        list.appendChild(row);
+      });
+    }
+
+    (function initEnvironments() {
+      var pop = byId('env-pop');
+      var select = byId('env-select');
+
+      renderEnvSelect();
+
+      select.addEventListener('change', function () {
+        if (select.value === '__manage') {
+          renderEnvSelect();
+          renderEnvList();
+          byId('auth-pop').hidden = true;
+          // The click that picked the option also reaches the document
+          // listener in some browsers; deferring keeps the popup open.
+          setTimeout(function () { pop.hidden = false; }, 0);
+          return;
+        }
+        store('scramble-env-active', select.value);
+      });
+
+      byId('env-new').addEventListener('click', function () {
+        envEditing = null;
+        byId('env-name').value = '';
+        byId('env-base').value = '';
+        byId('env-vars').value = '';
+        byId('env-delete').hidden = true;
+        renderEnvList();
+      });
+
+      byId('env-save').addEventListener('click', function () {
+        var name = byId('env-name').value.trim();
+        if (!name) return;
+        var envs = getEnvs().filter(function (env) { return env.name !== envEditing && env.name !== name; });
+        envs.push({ name: name, baseUrl: byId('env-base').value.trim(), vars: parseVars(byId('env-vars').value) });
+        saveEnvs(envs);
+        store('scramble-env-active', name);
+        envEditing = name;
+        byId('env-delete').hidden = false;
+        renderEnvSelect();
+        renderEnvList();
+      });
+
+      byId('env-delete').addEventListener('click', function () {
+        if (!envEditing) return;
+        saveEnvs(getEnvs().filter(function (env) { return env.name !== envEditing; }));
+        if (store('scramble-env-active') === envEditing) store('scramble-env-active', '');
+        envEditing = null;
+        byId('env-name').value = '';
+        byId('env-base').value = '';
+        byId('env-vars').value = '';
+        byId('env-delete').hidden = true;
+        renderEnvSelect();
+        renderEnvList();
+      });
+
       pop.addEventListener('click', function (event) { event.stopPropagation(); });
       document.addEventListener('click', function () { pop.hidden = true; });
     })();
@@ -456,6 +652,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       try { history.replaceState(null, '', location.pathname); } catch (e) { /* ignore */ }
       byId('welcome').hidden = false;
       byId('request-view').hidden = true;
+      byId('ws-view').hidden = true;
       byId('overview-link').classList.add('active');
       var active = document.querySelector('.nav-item.active');
       if (active) active.classList.remove('active');
@@ -648,6 +845,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
 
       byId('welcome').hidden = true;
       byId('request-view').hidden = false;
+      byId('ws-view').hidden = true;
 
       byId('crumb-group').textContent = item.tag;
       byId('crumb-name').textContent = item.op.summary || item.path;
@@ -1084,7 +1282,15 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
 
       // Relative URLs are fetched against the page origin, which is always
       // the app serving these docs — works behind proxies and tunnels too.
-      return { url: byId('url-input').value, headers: headers, body: body };
+      // An active environment can override the base URL and fill variables.
+      var url = applyVars(byId('url-input').value);
+      var env = activeEnv();
+      if (env && env.baseUrl && url.indexOf('http') !== 0) {
+        url = env.baseUrl.replace(/\\/+$/, '') + url;
+      }
+      Object.keys(headers).forEach(function (key) { headers[key] = applyVars(headers[key]); });
+      if (body) body = applyVars(body);
+      return { url: url, headers: headers, body: body };
     }
 
     /* ------------------------------------------------------------------ *
@@ -1093,7 +1299,9 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
 
     function absolute(url) {
       if (url.indexOf('http') === 0) return url;
-      var base = (spec && spec.servers && spec.servers[0] && spec.servers[0].url) || location.origin;
+      var env = activeEnv();
+      var base = (env && env.baseUrl) ||
+        (spec && spec.servers && spec.servers[0] && spec.servers[0].url) || location.origin;
       if (base.charAt(base.length - 1) === '/') base = base.slice(0, -1);
       return base + url;
     }
@@ -1266,6 +1474,48 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
     });
 
     /* ------------------------------------------------------------------ *
+     * Share links — request state encoded in the URL hash, no server needed
+     * ------------------------------------------------------------------ */
+
+    function encodeShare(state) {
+      return btoa(unescape(encodeURIComponent(JSON.stringify(state))))
+        .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/g, '');
+    }
+
+    function decodeShare(encoded) {
+      try {
+        var b64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+        return JSON.parse(decodeURIComponent(escape(atob(b64))));
+      } catch (e) { return null; }
+    }
+
+    /** Restores a teammate's shared request state after the op is selected. */
+    function applyShared(state) {
+      if (state.u) byId('url-input').value = state.u;
+      if (state.b) {
+        var editor = byId('body-editor');
+        if (editor) {
+          bodyMode = 'raw';
+          var raw = document.querySelector('#panel-body input[value=raw]');
+          if (raw) raw.checked = true;
+          editor.hidden = false;
+          editor.value = state.b;
+          validateBody();
+          renderHeadersPanel();
+        }
+      }
+    }
+
+    byId('share-btn').addEventListener('click', function () {
+      if (!current) return;
+      var state = { u: byId('url-input').value };
+      var editor = byId('body-editor');
+      if (bodyMode === 'raw' && editor && editor.value.trim()) state.b = editor.value;
+      var link = location.origin + location.pathname + '#' + current.id + '!' + encodeShare(state);
+      copyText(link, byId('share-btn'));
+    });
+
+    /* ------------------------------------------------------------------ *
      * Export as Postman Collection v2.1
      * ------------------------------------------------------------------ */
 
@@ -1340,6 +1590,210 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
     byId('export-postman').addEventListener('click', exportPostman);
 
     /* ------------------------------------------------------------------ *
+     * WebSockets — gateway docs + live console (Socket.IO / raw WS)
+     * ------------------------------------------------------------------ */
+
+    var wsDoc = null;
+    var wsConn = null;
+
+    function wsUrlFor(gateway) {
+      var origin = location.origin;
+      if (gateway.port) {
+        origin = location.protocol + '//' + location.hostname + ':' + gateway.port;
+      }
+      return origin + (gateway.namespace || '');
+    }
+
+    function setWsStatus(state) {
+      var chip = byId('ws-status');
+      chip.textContent = state;
+      chip.className = 'chip ' + (state === 'connected' ? 'chip-ok' : state === 'error' ? 'chip-err' : '');
+      byId('ws-send').disabled = state !== 'connected';
+      byId('ws-connect').textContent = state === 'connected' ? 'Disconnect' : 'Connect';
+    }
+
+    function wsLog(direction, name, data) {
+      var log = byId('ws-log');
+      var empty = log.querySelector('.resp-empty');
+      if (empty) empty.remove();
+
+      var arrow = direction === 'in' ? '▼' : direction === 'out' ? '▲' : '●';
+      var body = '';
+      if (data !== undefined && data !== null && data !== '') {
+        var text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+        body = '<pre class="code ws-log-data">' + hljson(text) + '</pre>';
+      }
+      var row = el('<div class="ws-log-row">' +
+        '<span class="ws-dir ws-dir-' + direction + '">' + arrow + '</span>' +
+        '<span class="ws-log-name">' + esc(name) + '</span>' +
+        '<span class="ws-log-time dim">' + new Date().toLocaleTimeString() + '</span>' +
+        body +
+      '</div>');
+      log.insertBefore(row, log.firstChild);
+      while (log.children.length > 100) log.removeChild(log.lastChild);
+    }
+
+    function loadSocketIo(callback) {
+      if (window.io) return callback(window.io);
+      // Served by the user's own Socket.IO server — no CDN involved.
+      var script = document.createElement('script');
+      script.src = '/socket.io/socket.io.js';
+      script.onload = function () { callback(window.io || null); };
+      script.onerror = function () { callback(null); };
+      document.head.appendChild(script);
+    }
+
+    function wsDisconnect() {
+      if (!wsConn) return;
+      try {
+        if (wsConn.kind === 'socketio') wsConn.socket.disconnect();
+        else wsConn.socket.close();
+      } catch (e) { /* already closed */ }
+      wsConn = null;
+      setWsStatus('disconnected');
+    }
+
+    function wsConnect() {
+      var url = byId('ws-url').value;
+      var transport = byId('ws-transport').value;
+      setWsStatus('connecting…');
+
+      if (transport === 'ws') {
+        var wsUrl = url.replace(/^http/, 'ws');
+        var socket;
+        try {
+          socket = new WebSocket(wsUrl);
+        } catch (e) {
+          setWsStatus('error');
+          wsLog('sys', 'error', String(e));
+          return;
+        }
+        wsConn = { kind: 'ws', socket: socket };
+        socket.onopen = function () { setWsStatus('connected'); wsLog('sys', 'connected', wsUrl); };
+        socket.onclose = function () { if (wsConn && wsConn.socket === socket) { wsConn = null; } setWsStatus('disconnected'); };
+        socket.onerror = function () { setWsStatus('error'); wsLog('sys', 'error', 'WebSocket error — is the gateway using the ws adapter?'); };
+        socket.onmessage = function (event) {
+          var data = event.data;
+          try { data = JSON.parse(event.data); } catch (e) { /* keep raw */ }
+          wsLog('in', (data && data.event) || 'message', data);
+        };
+        return;
+      }
+
+      loadSocketIo(function (io) {
+        if (!io) {
+          setWsStatus('error');
+          wsLog('sys', 'error', 'Could not load /socket.io/socket.io.js from this server. Raw WebSocket may work instead.');
+          return;
+        }
+        var socket = io(url, { transports: ['websocket', 'polling'] });
+        wsConn = { kind: 'socketio', socket: socket };
+        socket.on('connect', function () { setWsStatus('connected'); wsLog('sys', 'connected', 'id: ' + socket.id); });
+        socket.on('disconnect', function (reason) { setWsStatus('disconnected'); wsLog('sys', 'disconnected', reason); });
+        socket.on('connect_error', function (err) { setWsStatus('error'); wsLog('sys', 'connect_error', String(err && err.message || err)); });
+        if (socket.onAny) {
+          socket.onAny(function (eventName) {
+            var args = [].slice.call(arguments, 1);
+            wsLog('in', eventName, args.length === 1 ? args[0] : args);
+          });
+        }
+      });
+    }
+
+    byId('ws-connect').addEventListener('click', function () {
+      if (wsConn) wsDisconnect();
+      else wsConnect();
+    });
+
+    byId('ws-send').addEventListener('click', function () {
+      if (!wsConn) return;
+      var name = byId('ws-event-name').value.trim();
+      if (!name) return;
+      var text = byId('ws-payload').value.trim();
+      var data = null;
+      if (text) {
+        try { data = JSON.parse(text); } catch (e) { data = text; }
+      }
+
+      if (wsConn.kind === 'socketio') {
+        wsConn.socket.emit(name, data, function (ack) { wsLog('in', name + ' · ack', ack); });
+      } else {
+        wsConn.socket.send(JSON.stringify({ event: name, data: data }));
+      }
+      wsLog('out', name, data);
+    });
+
+    byId('ws-clear').addEventListener('click', function () {
+      byId('ws-log').innerHTML = '<div class="resp-empty">Connect and send an event to see live traffic here.</div>';
+    });
+
+    byId('ws-crumb-overview').addEventListener('click', showOverview);
+
+    function showWsView(gateway, wsEvent, navEl) {
+      current = null;
+      byId('welcome').hidden = true;
+      byId('request-view').hidden = true;
+      byId('ws-view').hidden = false;
+
+      byId('overview-link').classList.remove('active');
+      var active = document.querySelector('.nav-item.active');
+      if (active) active.classList.remove('active');
+      if (navEl) navEl.classList.add('active');
+
+      byId('ws-crumb-gateway').textContent = gateway.name;
+      byId('ws-crumb-event').textContent = wsEvent.event;
+      byId('ws-url').value = wsUrlFor(gateway);
+      byId('ws-event-name').value = wsEvent.event;
+      byId('ws-summary').textContent = wsEvent.summary || '';
+
+      var example = wsEvent.payload && Object.keys(wsEvent.payload).length
+        ? exampleOf(wsEvent.payload, 0) : null;
+      byId('ws-payload').value = example !== null ? JSON.stringify(example, null, 2) : '';
+
+      var doc = '';
+      if (wsEvent.description) doc += '<p class="dim">' + esc(wsEvent.description) + '</p>';
+      var payloadTree = wsEvent.payload ? schemaTree(wsEvent.payload, 0) : '';
+      if (payloadTree) doc += '<h4>Payload schema</h4><div class="schema">' + payloadTree + '</div>';
+      var responseTree = wsEvent.response ? schemaTree(wsEvent.response, 0) : '';
+      if (responseTree) doc += '<h4>Response schema</h4><div class="schema">' + responseTree + '</div>';
+      byId('ws-doc').innerHTML = doc;
+    }
+
+    function renderWsSidebar() {
+      var nav = byId('side-collections');
+      wsDoc.gateways.forEach(function (gateway) {
+        var group = el('<div class="group">' +
+          '<button type="button" class="group-head">' +
+            '<span class="chev">▸</span>' +
+            '<span class="group-name">🔌 ' + esc(gateway.name) + '</span>' +
+            '<span class="group-count">' + gateway.events.length + '</span>' +
+          '</button>' +
+          '<div class="group-items"></div>' +
+        '</div>');
+
+        group.querySelector('.group-head').addEventListener('click', function () {
+          group.classList.toggle('open');
+        });
+
+        var itemsEl = group.querySelector('.group-items');
+        gateway.events.forEach(function (wsEvent) {
+          var a = el('<button type="button" class="nav-item">' +
+            '<span class="method method-sm method-ws">WS</span>' +
+            '<span class="nav-text">' +
+              '<span class="nav-name">' + esc(wsEvent.summary || wsEvent.event) + '</span>' +
+              '<span class="nav-path">' + esc(wsEvent.event) + '</span>' +
+            '</span>' +
+          '</button>');
+          a.setAttribute('data-search', ('ws ' + wsEvent.event + ' ' + (wsEvent.summary || '') + ' ' + gateway.name).toLowerCase());
+          a.addEventListener('click', function () { showWsView(gateway, wsEvent, a); });
+          itemsEl.appendChild(a);
+        });
+
+        nav.appendChild(group);
+      });
+    }
+
+    /* ------------------------------------------------------------------ *
      * Search
      * ------------------------------------------------------------------ */
 
@@ -1385,8 +1839,25 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       renderOverview(groups);
       renderSidebar(groups);
 
-      var fromHash = location.hash && opsById[location.hash.slice(1)];
-      if (fromHash) selectOperation(fromHash);
+      var hash = location.hash.slice(1);
+      var bang = hash.indexOf('!');
+      var opKey = bang === -1 ? hash : hash.slice(0, bang);
+      var sharedState = bang === -1 ? null : decodeShare(hash.slice(bang + 1));
+      var fromHash = opKey && opsById[opKey];
+      if (fromHash) {
+        selectOperation(fromHash);
+        if (sharedState) applyShared(sharedState);
+      }
+
+      // WebSocket gateway docs are optional — hide the section when absent.
+      fetch(SPEC_URL.replace('-json', '-ws-json')).then(function (res) {
+        return res.ok ? res.json() : null;
+      }).then(function (doc) {
+        if (doc && doc.gateways && doc.gateways.length) {
+          wsDoc = doc;
+          renderWsSidebar();
+        }
+      }).catch(function () { /* endpoint not available */ });
     }).catch(function (err) {
       byId('welcome-desc').textContent = 'Failed to load ' + SPEC_URL + ' — ' + String(err);
     });
@@ -1495,6 +1966,51 @@ function buildCss(accent: string): string {
     }
     .auth-field input:focus, .auth-field select:focus { border-color: var(--accent); }
     .auth-note { font-size: 11px; }
+
+    /* ---- WebSocket console ---- */
+    .method-ws { background: #a371f7; }
+    .ws-compose { display: flex; gap: 8px; margin: 14px 0 8px; }
+    .ws-event-input {
+      flex: none; width: 260px; padding: 8px 12px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--bg-2); color: var(--fg);
+      font-family: var(--mono); font-size: 13px; outline: none;
+    }
+    .ws-event-input:focus { border-color: var(--accent); }
+    .ws-doc { margin-top: 6px; }
+    .ws-log-row { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    .ws-dir { font-size: 11px; margin-right: 8px; }
+    .ws-dir-in { color: #3fb950; }
+    .ws-dir-out { color: var(--accent); }
+    .ws-dir-sys { color: var(--fg-3); }
+    .ws-log-name { font-family: var(--mono); font-size: 12.5px; font-weight: 700; }
+    .ws-log-time { float: right; font-size: 11px; }
+    .ws-log-data { margin: 6px 0 0; font-size: 12px; }
+
+    /* ---- Environments ---- */
+    .env-select {
+      padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg-2); color: var(--fg-2); font-size: 12.5px; font-family: var(--font);
+      outline: none; cursor: pointer; max-width: 170px;
+    }
+    .env-select:focus { border-color: var(--accent); }
+    .env-pop { width: 360px; }
+    .env-pop textarea {
+      padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg-2); color: var(--fg); font-family: var(--mono); font-size: 12.5px;
+      outline: none; resize: vertical;
+    }
+    .env-pop textarea:focus { border-color: var(--accent); }
+    .env-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; max-height: 130px; overflow-y: auto; }
+    .env-item {
+      text-align: left; padding: 6px 10px; border-radius: 7px; border: 1px solid var(--border);
+      background: var(--bg-2); color: var(--fg); font-family: var(--mono); font-size: 12px; cursor: pointer;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .env-item:hover, .env-item.active { border-color: var(--accent); }
+    .env-empty { font-size: 12px; margin-bottom: 8px; }
+    .env-actions { display: flex; gap: 8px; margin-bottom: 8px; }
+    .env-delete { color: #f85149; }
+    .btn-share { flex: none; padding: 9px 12px; font-size: 14px; }
 
     /* ---- Layout ---- */
     .layout { display: flex; height: calc(100vh - 52px); }

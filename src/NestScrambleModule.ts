@@ -3,11 +3,13 @@ import { DynamicModule, MiddlewareConsumer, Module, OnModuleInit, RequestMethod,
 import { ConfigurableModuleClass, MODULE_OPTIONS_TOKEN } from './nest-scramble.module-definition';
 import { PostmanCollectionGenerator } from './generators/PostmanCollectionGenerator';
 import { MOCK_GLOBAL_PREFIX, MockMiddleware } from './middleware/MockMiddleware';
+import { DriftMiddleware } from './drift/DriftMiddleware';
 import { ScannerService } from './scanner/ScannerService';
 import { IncrementalScannerService } from './scanner/IncrementalScannerService';
 import { MockGenerator } from './utils/MockGenerator';
 import { OpenApiTransformer } from './utils/OpenApiTransformer';
 import { createDocsController, normalizeDocsPath } from './controllers/DocsController';
+import { buildWsDocument, GatewayScanner } from './websocket/GatewayScanner';
 import { AutoDetector } from './utils/AutoDetector';
 import { buildWildcardRoute } from './utils/NestCompat';
 import { LogLevel, ScrambleLogger } from './utils/ScrambleLogger';
@@ -66,6 +68,14 @@ export interface NestScrambleOptions {
    * UI. Leave unset for a fully self-contained docs page.
    */
   scalarUrl?: string;
+  /**
+   * Opt-in drift detection: samples real JSON responses in development and
+   * warns when they do not match the generated documentation (missing fields,
+   * unexpected fields, type mismatches, undocumented routes/statuses).
+   * Buffers response bodies (bounded), so keep it off in production.
+   * @default false
+   */
+  enableDriftDetection?: boolean;
   /**
    * Controls library output. Use `'silent'` to suppress it entirely.
    * @default 'info'
@@ -193,6 +203,7 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
       skipDependencyTracking: options.skipDependencyTracking || false,
       enableHashCollisionDetection: options.enableHashCollisionDetection !== false,
       scalarUrl: options.scalarUrl,
+      enableDriftDetection: options.enableDriftDetection || false,
       logLevel: options.logLevel || 'info',
       globalPrefix: options.globalPrefix || '',
     };
@@ -241,6 +252,22 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
       );
     }
 
+    // WebSocket gateways are documented alongside the HTTP routes. A project
+    // without gateways gets an empty document, and the UI hides the section.
+    let wsDocument: any = null;
+    try {
+      const gateways = new GatewayScanner().scanGateways(config.sourcePath);
+      if (gateways.length > 0) {
+        wsDocument = buildWsDocument(gateways, {
+          title: config.apiTitle,
+          version: config.apiVersion,
+        });
+        ScrambleLogger.debug(`Found ${gateways.length} WebSocket gateway(s)`);
+      }
+    } catch (error) {
+      ScrambleLogger.warn(`Gateway scan failed: ${error instanceof Error ? error.message : error}`);
+    }
+
     const transformer = new OpenApiTransformer(config.baseUrl, config.globalPrefix);
     const openApiSpec = transformer.transform(
       controllers,
@@ -284,6 +311,10 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
           useValue: openApiSpec,
         },
         {
+          provide: 'NEST_SCRAMBLE_WS',
+          useValue: wsDocument,
+        },
+        {
           provide: 'NEST_SCRAMBLE_OPTIONS',
           useValue: config,
         },
@@ -300,6 +331,12 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
   }
 
   configure(consumer: MiddlewareConsumer) {
+    if (NestScrambleModule.moduleOptions.enableDriftDetection) {
+      consumer
+        .apply(DriftMiddleware)
+        .forRoutes({ path: buildWildcardRoute(''), method: RequestMethod.ALL });
+    }
+
     if (NestScrambleModule.moduleOptions.enableMock === false) {
       return;
     }

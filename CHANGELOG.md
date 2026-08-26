@@ -6,6 +6,45 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [5.2.0] - 2026-08-27
+
+### Added
+- **Drift detection** (`enableDriftDetection: true`): an opt-in middleware that
+  samples real JSON responses in development and warns — once per unique
+  finding — when the running API disagrees with the generated documentation:
+  missing required fields, fields returned but not documented, type mismatches,
+  undocumented routes and undocumented success statuses. Static docs promise
+  they match the code; this proves it at runtime.
+- **`nest-scramble doctor`**: documentation health report with a 0–100 score
+  and a letter grade. Flags opaque return types (errors), untyped parameters
+  and opaque bodies (warnings), missing JSDoc summaries and unvalidated DTOs
+  (hints), each pointing at the exact controller and route. `--min-score <n>`
+  makes it a CI gate, `--json` makes it machine-readable.
+- **`nest-scramble test`**: a declarative scenario runner. JSON scenarios chain
+  requests, capture values from responses (`"token": "$.accessToken"`), feed
+  them into later steps via `{{variables}}`, and assert on status, body subsets
+  and — with `matchesSpec: true` — conformance to the generated OpenAPI
+  document. Non-zero exit code on failure; zero dependencies (native fetch).
+- **`nest-scramble changelog`**: generates a consumer-facing Markdown changelog
+  between two API versions (spec files or source checkouts), grouped as
+  Breaking / Removed / Changed / Added.
+- **WebSocket gateway documentation**: `@WebSocketGateway()` classes and their
+  `@SubscribeMessage()` handlers are scanned statically like controllers —
+  namespaces, dedicated ports, `@MessageBody()` payload DTOs and return types
+  all become schemas served at `/docs-ws-json`. The docs UI grows a live
+  WebSocket console: connect via Socket.IO (client script served by your own
+  server — no CDN) or raw WebSocket, send events with a JSON-validated payload
+  editor, and watch live traffic in an event log.
+- **Environments in the docs UI**: Postman-style environments with a base URL
+  override and `{{variable}}` substitution in URLs, headers and bodies.
+  Managed from the topbar, persisted in localStorage, reflected in generated
+  code snippets.
+- **Share links in the docs UI**: one click copies a URL that encodes the
+  current request — endpoint, edited URL, body — in the hash. Opening it
+  restores the exact request. No server, no accounts.
+
+---
+
 ## [5.1.1] - 2026-08-26
 
 ### Fixed
