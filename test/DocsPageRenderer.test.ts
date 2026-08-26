@@ -95,9 +95,12 @@ describe('renderDocsPage (built-in UI, default)', () => {
     expect(html).not.toContain('javascript:alert(1)');
   });
 
-  it('includes the try-it panel and search', () => {
+  it('includes the request builder (Send button, tabs) and search', () => {
     const html = renderDocsPage({ specUrl: '/docs-json' });
-    expect(html).toContain('Try it');
+    expect(html).toContain('id="send-btn"');
+    expect(html).toContain('data-tab="params"');
+    expect(html).toContain('data-tab="headers"');
+    expect(html).toContain('data-tab="body"');
     expect(html).toContain('id="search"');
   });
 });

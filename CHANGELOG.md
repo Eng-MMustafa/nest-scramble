@@ -6,17 +6,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
-## [Unreleased]
+## [5.1.0] - 2026-08-26
 
 ### Changed
-- **The docs UI is now built-in and fully self-contained.** The `/docs` page
-  used to load the Scalar bundle (>1 MB) from a public CDN plus two Google
-  Fonts — three network dependencies at every page view, and a blank page on
-  air-gapped networks. The new UI is a single ~27 KB HTML response: inline CSS,
-  inline vanilla JS, system fonts, zero external requests. It ships a grouped
-  sidebar, search, light/dark themes, schema trees with validation constraints,
-  generated examples, and a try-it panel that sends real requests. Setting
-  `scalarUrl` still opts in to hosting Scalar from a URL you control.
+- **The docs UI is now built-in, fully self-contained, and Postman-style.** The
+  `/docs` page used to load the Scalar bundle (>1 MB) from a public CDN plus two
+  Google Fonts — three network dependencies at every page view, and a blank page
+  on air-gapped networks. The new UI is a single ~70 KB HTML response: inline
+  CSS, inline vanilla JS, system fonts, zero external requests. It is a full
+  Postman-style workspace:
+  - an Overview page with live API stats and a Swagger-style schemas browser;
+  - a sidebar with collapsible request groups, search, and a persisted request
+    history;
+  - a request builder with breadcrumb, a URL bar that live-syncs with the
+    params table (enable checkboxes, ghost rows for custom params/headers),
+    per-request Authorization inheriting from a global auth helper (Bearer /
+    API key, stored locally), body mode selector with live JSON validation and
+    Beautify, and generated cURL / fetch / axios snippets;
+  - a response viewer with Body / Headers tabs, JSON syntax highlighting,
+    status/time/size meta, and Copy / Download buttons;
+  - one-click export of the whole API as a Postman Collection v2.1;
+  - light/dark themes, and requests are sent same-origin so the Send button
+    works behind proxies and tunnels.
+  Setting `scalarUrl` still opts in to hosting Scalar from a URL you control.
 - **Watch mode no longer needs chokidar.** The file watcher now uses Node's own
   `fs.watch` (recursive on Windows/macOS/modern Linux, with a per-directory
   fallback elsewhere). chokidar is removed from the peer dependencies — the

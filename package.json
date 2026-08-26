@@ -1,6 +1,6 @@
 {
   "name": "nest-scramble",
-  "version": "5.0.0",
+  "version": "5.1.0",
   "description": "A next-generation, decorator-free API documentation engine with Postman generation, live mocking, and typed client SDK generation for NestJS 10 and 11, engineered by Mohamed Mustafa",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

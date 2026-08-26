@@ -24,12 +24,20 @@ npm run start:dev        # → http://localhost:3000/docs
 ```
 
 - **Zero runtime dependencies** — in a NestJS project, installing this package adds nothing but this package
-- **Docs UI** — built-in interactive reference at `/docs`: search, schema trees, try-it panel, dark and light themes — one ~27 KB page, no CDN, works offline and air-gapped
+- **Docs UI** — built-in Postman-style workspace at `/docs`: request builder with live URL sync, Params / Auth / Headers / Body / Docs / Code tabs, cURL / fetch / axios snippets, request history, JSON-highlighted responses, a schemas browser, one-click Postman collection export, dark and light themes — one self-contained page, no CDN, works offline and air-gapped
 - **OpenAPI 3.0** — served at `/docs-json`, or written to a file from the CLI
 - **Typed client SDK** — real interfaces from your DTOs, native `fetch`, zero runtime deps
 - **Postman collection** — one command, file pickers for uploads included
 - **Live mocking** — every route under `/scramble-mock/*` with realistic fake data
 - **Breaking-change detection** — `nest-scramble diff` gates your CI
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Eng-MMustafa/nest-scramble/main/assets/docs-overview.png" alt="Overview page with live API stats and schemas browser" width="49%" />
+  <img src="https://raw.githubusercontent.com/Eng-MMustafa/nest-scramble/main/assets/docs-request.png" alt="Postman-style request builder with a live response" width="49%" />
+</p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Eng-MMustafa/nest-scramble/main/assets/docs-params-light.png" alt="Query params with live URL sync — light theme" width="75%" />
+</p>
 
 > **Upgrading?** v5 is a major in name only — the library dropped its last runtime
 > dependency, and the version bump exists because some exported scanner internals
@@ -245,10 +253,10 @@ alternative.
 | `defaultAuthType` | Nothing — the generated document declares no security schemes |
 | `enableApiVersioning` | `globalPrefix`, mirroring `app.setGlobalPrefix()` |
 
-### Self-hosting the docs UI
+### Using Scalar instead of the built-in UI
 
-By default the docs page loads the Scalar bundle from jsDelivr, pinned to a major
-version. If your environment has no internet access, serve the asset yourself:
+The default docs page is fully self-contained — no CDN, no internet access needed.
+If you prefer the Scalar reference UI, self-host its bundle and opt in:
 
 ```typescript
 NestScrambleModule.forRoot({
