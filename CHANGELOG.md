@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [5.1.1] - 2026-08-26
+
+### Fixed
+- README screenshots pointed at a `main` branch, but the repository default
+  branch is `master` — the images were broken on GitHub and npm. Docs-only
+  release; no code changes.
+
+---
+
 ## [5.1.0] - 2026-08-26
 
 ### Changed

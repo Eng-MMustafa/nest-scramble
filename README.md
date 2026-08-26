@@ -32,11 +32,11 @@ npm run start:dev        # → http://localhost:3000/docs
 - **Breaking-change detection** — `nest-scramble diff` gates your CI
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Eng-MMustafa/nest-scramble/main/assets/docs-overview.png" alt="Overview page with live API stats and schemas browser" width="49%" />
-  <img src="https://raw.githubusercontent.com/Eng-MMustafa/nest-scramble/main/assets/docs-request.png" alt="Postman-style request builder with a live response" width="49%" />
+  <img src="https://raw.githubusercontent.com/Eng-MMustafa/nest-scramble/master/assets/docs-overview.png" alt="Overview page with live API stats and schemas browser" width="49%" />
+  <img src="https://raw.githubusercontent.com/Eng-MMustafa/nest-scramble/master/assets/docs-request.png" alt="Postman-style request builder with a live response" width="49%" />
 </p>
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Eng-MMustafa/nest-scramble/main/assets/docs-params-light.png" alt="Query params with live URL sync — light theme" width="75%" />
+  <img src="https://raw.githubusercontent.com/Eng-MMustafa/nest-scramble/master/assets/docs-params-light.png" alt="Query params with live URL sync — light theme" width="75%" />
 </p>
 
 > **Upgrading?** v5 is a major in name only — the library dropped its last runtime
