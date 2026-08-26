@@ -142,13 +142,19 @@ async function runInit(options: { module: string }): Promise<void> {
         true,
       );
 
-      // Check if already imported
-      const alreadyImported = sourceFile.statements.some(
-        (statement) =>
-          ts.isImportDeclaration(statement) &&
-          ts.isStringLiteral(statement.moduleSpecifier) &&
-          statement.moduleSpecifier.text === 'nest-scramble',
-      );
+      // Check if already imported. An `import` declaration is the common case,
+      // but projects that worked around older typings used
+      // `require('nest-scramble')`, and a module that already references
+      // `NestScrambleModule` must not receive a second `forRoot()`.
+      const alreadyImported =
+        sourceFile.statements.some(
+          (statement) =>
+            ts.isImportDeclaration(statement) &&
+            ts.isStringLiteral(statement.moduleSpecifier) &&
+            statement.moduleSpecifier.text === 'nest-scramble',
+        ) ||
+        /require\(\s*['"]nest-scramble['"]\s*\)/.test(originalText) ||
+        originalText.includes('NestScrambleModule');
 
       if (alreadyImported) {
         console.log('⚠️  Nest-Scramble is already imported in this module');

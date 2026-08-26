@@ -282,6 +282,68 @@ describe('CLI (e2e)', () => {
     });
   });
 
+  describe('init', () => {
+    const bareModule = [
+      "import { Module } from '@nestjs/common';",
+      "import { UsersModule } from './users/users.module';",
+      '',
+      '@Module({',
+      '  imports: [UsersModule],',
+      '})',
+      'export class AppModule {}',
+      '',
+    ].join('\n');
+
+    const writeModule = (name: string, content: string): string => {
+      const target = path.join(workDir, name);
+      fs.writeFileSync(target, content);
+      return target;
+    };
+
+    it('injects the import and forRoot() into a bare module', () => {
+      const target = writeModule('bare.module.ts', bareModule);
+      const result = runCli(['init', '--module', target]);
+
+      expect(result.status).toBe(0);
+      const patched = fs.readFileSync(target, 'utf-8');
+      expect(patched).toContain("import { NestScrambleModule } from 'nest-scramble';");
+      expect(patched).toContain('NestScrambleModule.forRoot(),');
+      // The import lands after the existing imports, not inside the decorator.
+      expect(patched.indexOf('nest-scramble')).toBeLessThan(patched.indexOf('@Module'));
+    });
+
+    it('is idempotent: a second run changes nothing', () => {
+      const target = writeModule('idempotent.module.ts', bareModule);
+      runCli(['init', '--module', target]);
+      const afterFirst = fs.readFileSync(target, 'utf-8');
+
+      const second = runCli(['init', '--module', target]);
+
+      expect(second.status).toBe(0);
+      expect(second.stdout).toContain('already imported');
+      expect(fs.readFileSync(target, 'utf-8')).toBe(afterFirst);
+    });
+
+    it('does not inject a duplicate when the module uses require()', () => {
+      // Projects worked around older typings with a require() call; that is
+      // still an installation and must not receive a second forRoot().
+      const requireModule = bareModule.replace(
+        "import { Module } from '@nestjs/common';",
+        [
+          "import { Module } from '@nestjs/common';",
+          "const { NestScrambleModule } = require('nest-scramble');",
+        ].join('\n'),
+      );
+      const target = writeModule('require.module.ts', requireModule);
+
+      const result = runCli(['init', '--module', target]);
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain('already imported');
+      expect(fs.readFileSync(target, 'utf-8')).toBe(requireModule);
+    });
+  });
+
   describe('meta', () => {
     it('reports the package version', () => {
       const expected = require('../../package.json').version;

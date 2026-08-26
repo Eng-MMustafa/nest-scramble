@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **`init` no longer injects a duplicate `forRoot()`.** The already-installed
+  check only recognized `import` declarations, so a module that loaded the
+  library with `require('nest-scramble')` — a common workaround for older
+  typings — received a second `NestScrambleModule.forRoot()`. Any existing
+  reference to the module now counts as installed. Found by running `init`
+  against a real v3-era project; covered by three new CLI e2e tests.
+
+---
+
 ## [5.0.0] - 2026-08-26
 
 ### Changed
