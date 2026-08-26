@@ -45,6 +45,9 @@ build-and-publish.sh
 UI_FEATURES.md
 examples/futuristic-ui-example.ts
 
+# Marketing material (local only — README screenshots in assets/ stay tracked)
+assets/promo/
+
 # Redundant (package.json `files` field is the source of truth)
 .npmignore
 
