@@ -1,5 +1,6 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
 import * as ts from 'typescript';
+import * as fs from 'fs';
 import * as path from 'path';
 import { TsProject } from '../analysis/TsProject';
 import {
@@ -49,7 +50,6 @@ export class GatewayScanner {
 
     let project: TsProject;
     try {
-      const fs = require('fs');
       project = fs.existsSync(tsconfigPath) ? new TsProject(tsconfigPath) : new TsProject();
       project.addSourceFilesInDirectory(fullSourcePath);
     } catch (error) {

@@ -1,7 +1,43 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
-import { Logger } from '@nestjs/common';
-
 export type LogLevel = 'silent' | 'error' | 'warn' | 'info' | 'debug';
+
+/** The subset of the NestJS `Logger` surface this wrapper uses. */
+interface LoggerLike {
+  log(message: string): void;
+  warn(message: string): void;
+  error(message: string, trace?: string): void;
+  debug(message: string): void;
+}
+
+/**
+ * Resolves the NestJS logger lazily.
+ *
+ * `@nestjs/common` is a peer dependency of the *module*, but the CLI
+ * (`generate`, `diff`, `doctor`, `changelog`, `test`) needs nothing from
+ * NestJS — it reads source files. A static import here made the whole CLI
+ * crash at require time in any environment without NestJS installed, such as
+ * a CI job that only checks out two source trees to diff them.
+ */
+function createLogger(): LoggerLike {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { Logger } = require('@nestjs/common');
+    return new Logger('Nest-Scramble');
+  } catch {
+    const prefix = '[Nest-Scramble]';
+    return {
+      // eslint-disable-next-line no-console
+      log: (message: string) => console.log(`${prefix} ${message}`),
+      // eslint-disable-next-line no-console
+      warn: (message: string) => console.warn(`${prefix} ${message}`),
+      error: (message: string, trace?: string) =>
+        // eslint-disable-next-line no-console
+        console.error(`${prefix} ${message}`, ...(trace ? [trace] : [])),
+      // eslint-disable-next-line no-console
+      debug: (message: string) => console.debug(`${prefix} ${message}`),
+    };
+  }
+}
 
 const LEVEL_WEIGHT: Record<LogLevel, number> = {
   silent: 0,
@@ -21,7 +57,7 @@ const LEVEL_WEIGHT: Record<LogLevel, number> = {
  */
 export class ScrambleLogger {
   private static level: LogLevel = 'info';
-  private static readonly logger = new Logger('Nest-Scramble');
+  private static readonly logger: LoggerLike = createLogger();
 
   static configure(level: LogLevel | undefined): void {
     if (level && level in LEVEL_WEIGHT) {

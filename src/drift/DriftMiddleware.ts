@@ -43,7 +43,7 @@ export class DriftMiddleware implements NestMiddleware {
 
     const originalWrite = res.write;
     const originalEnd = res.end;
-    const self = this;
+    const inspect = this.inspect.bind(this);
 
     res.write = function (chunk: any, ...rest: any[]) {
       capture(chunk);
@@ -54,7 +54,7 @@ export class DriftMiddleware implements NestMiddleware {
       capture(chunk);
       const result = originalEnd.call(this, chunk, ...rest);
       try {
-        self.inspect(req.method || 'GET', path, res, chunks, overflow);
+        inspect(req.method || 'GET', path, res, chunks, overflow);
       } catch (error) {
         ScrambleLogger.debug(`Drift check failed: ${error instanceof Error ? error.message : error}`);
       }

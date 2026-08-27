@@ -142,7 +142,11 @@ export class DtoAnalyzer {
         const declarations = symbol.getDeclarations() ?? [];
         for (const decl of declarations) {
           if (ts.isClassDeclaration(decl) || ts.isInterfaceDeclaration(decl)) {
-            const properties = this.extractProperties(decl);
+            // Properties come from the resolved *type*, not the declaration's
+            // own members: `extends BaseDto`, `extends PartialType(CreateDto)`
+            // and interface inheritance all contribute properties that never
+            // appear in `decl.members`.
+            const properties = this.extractPropertiesOfType(type);
             // Use the class/interface name instead of full type text
             const className = decl.name?.text || symbol.getName() || typeText;
             return {
@@ -190,39 +194,60 @@ export class DtoAnalyzer {
     return this.checker.getTypeArguments(type as ts.TypeReference);
   }
 
-  private extractProperties(decl: ts.ClassDeclaration | ts.InterfaceDeclaration): PropertyInfo[] {
+  private extractPropertiesOfType(type: ts.Type): PropertyInfo[] {
     const properties: PropertyInfo[] = [];
 
-    for (const member of decl.members) {
-      if (!ts.isPropertyDeclaration(member) && !ts.isPropertySignature(member)) {
+    for (const symbol of this.checker.getPropertiesOfType(type)) {
+      // Methods and accessors are not data properties of a DTO.
+      if (symbol.flags & (ts.SymbolFlags.Method | ts.SymbolFlags.Accessor)) {
         continue;
       }
 
-      const name = member.name.getText();
-      const type = this.checker.getTypeAtLocation(member);
+      // Mapped types (`PartialType`, `PickType`, ...) synthesize property
+      // symbols, but each one still links back to the original declaration —
+      // which is where the validation decorators and JSDoc live.
+      const decl = (symbol.getDeclarations() ?? []).find(
+        (d): d is ts.PropertyDeclaration | ts.PropertySignature =>
+          ts.isPropertyDeclaration(d) || ts.isPropertySignature(d),
+      );
+
+      const name = symbol.getName();
 
       // Interface members have no decorators; only class properties do.
-      const validation = ts.isPropertyDeclaration(member)
-        ? extractValidationConstraints(member)
+      const validation = decl && ts.isPropertyDeclaration(decl)
+        ? extractValidationConstraints(decl)
         : undefined;
 
       // `@IsOptional()` and `@IsNotEmpty()` override the `?` marker, because the
       // validation pipe, not the TypeScript type, decides what the API accepts.
-      let isOptional = member.questionToken !== undefined;
-      if (validation?.explicitlyOptional) {
-        isOptional = true;
-      } else if (validation?.explicitlyRequired) {
-        isOptional = false;
+      // The exception is optionality *synthesized* by a mapped type: under
+      // `PartialType(CreateDto)` every field really is optional at runtime, so
+      // an `@IsNotEmpty()` inherited from the original class must not win.
+      const symbolOptional = (symbol.flags & ts.SymbolFlags.Optional) !== 0;
+      const declOptional = decl?.questionToken !== undefined;
+      const synthesizedOptional = symbolOptional && !declOptional;
+
+      let isOptional = symbolOptional;
+      if (!synthesizedOptional) {
+        if (validation?.explicitlyOptional) {
+          isOptional = true;
+        } else if (validation?.explicitlyRequired) {
+          isOptional = false;
+        }
       }
 
-      const analyzedType = this.analyzeType(type, isOptional);
+      const propType = decl
+        ? this.checker.getTypeOfSymbolAtLocation(symbol, decl)
+        : this.checker.getTypeOfSymbol(symbol);
+
+      const analyzedType = this.analyzeType(propType, isOptional);
 
       // The union-stripping branch re-derives `isOptional`, so re-assert the
       // decorator-driven decision afterwards.
       analyzedType.isOptional = isOptional;
 
       // Extract JSDoc description
-      const description = getJsDocInfo(member).description;
+      const description = decl ? getJsDocInfo(decl).description : undefined;
 
       properties.push({
         name,

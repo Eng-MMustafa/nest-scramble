@@ -11,6 +11,7 @@ import {
 } from '../analysis/AstHelpers';
 import { AnalyzedType, DtoAnalyzer } from '../utils/DtoAnalyzer';
 import { extractFileFields, fallbackFileField, FileFieldInfo } from '../utils/FileUploadExtractor';
+import { extractThrownErrors, ThrownErrorInfo } from '../utils/ThrownErrorExtractor';
 import { ScrambleLogger } from '../utils/ScrambleLogger';
 
 /**
@@ -57,6 +58,11 @@ export interface MethodInfo {
    * Empty for every route that does not accept an upload.
    */
   fileFields?: FileFieldInfo[];
+  /**
+   * Error responses recovered from `throw new <HttpException>(...)` statements
+   * written directly in the method body.
+   */
+  errorResponses?: ThrownErrorInfo[];
 }
 
 /**
@@ -471,6 +477,8 @@ export class ScannerService {
       }
     }
 
+    const errorResponses = extractThrownErrors(method);
+
     return {
       name: method.name.getText(),
       httpMethod,
@@ -486,6 +494,7 @@ export class ScannerService {
       description,
       deprecated,
       fileFields: fileFields.length > 0 ? fileFields : undefined,
+      errorResponses: errorResponses.length > 0 ? errorResponses : undefined,
     };
   }
 }

@@ -6,6 +6,43 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **DTO inheritance no longer loses properties.** The analyzer read only a
+  class declaration's *own* members, so `class CreateUserDto extends BaseDto`
+  silently dropped every inherited property, and the `@nestjs/mapped-types`
+  helpers — `PartialType`, `PickType`, `OmitType`, `IntersectionType`, the
+  standard way to write Update DTOs — produced **empty schemas**. Properties
+  now come from the type checker (`getPropertiesOfType`), which resolves the
+  full inheritance chain, mapped types and interface `extends`. Validation
+  decorators and JSDoc on inherited properties are preserved; under
+  `PartialType` every property is correctly optional even when the source
+  property carries `@IsNotEmpty()`, matching what the validation pipe does at
+  runtime. Covered by twelve new structural tests.
+- **The CLI no longer requires NestJS to be installed.** A static
+  `Logger` import from `@nestjs/common` made every command crash at require
+  time in environments without NestJS — such as a CI job that only checks out
+  two source trees to diff them. The logger now falls back to the console when
+  `@nestjs/common` is absent. Verified by installing the packed tarball plus
+  only `typescript` into an empty project and running `generate` and `doctor`.
+- **The `typescript` peer range is capped at `<7`.** TypeScript 7 (the native
+  compiler) does not expose the JS compiler API the scanner drives; with the
+  open-ended `>=5.0.0` range npm happily resolved 7.x and the scanner crashed
+  at startup. TypeScript 5 and 6 remain supported.
+
+### Added
+- **Error responses from `throw` statements.** `throw new NotFoundException('Order not found')`
+  in a controller method now documents a `404` with that exact message; all
+  built-in `HttpException` subclasses are recognized, plus
+  `new HttpException(msg, 409)` and `new HttpException(msg, HttpStatus.CONFLICT)`.
+  Thrown statuses carry the method's own message, so they overwrite the blanket
+  400/500 defaults and the generic guard-derived 401. Duplicate statuses
+  collapse to one response; exceptions thrown by called services are invisible
+  to static analysis and are deliberately not guessed.
+
+---
+
 ## [5.2.0] - 2026-08-27
 
 ### Added

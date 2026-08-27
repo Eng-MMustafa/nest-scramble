@@ -26,6 +26,7 @@ npm run start:dev        # → http://localhost:3000/docs
 - **Zero runtime dependencies** — in a NestJS project, installing this package adds nothing but this package
 - **Docs UI** — built-in Postman-style workspace at `/docs`: request builder with live URL sync, Params / Auth / Headers / Body / Docs / Code tabs, cURL / fetch / axios snippets, request history, JSON-highlighted responses, a schemas browser, one-click Postman collection export, dark and light themes — one self-contained page, no CDN, works offline and air-gapped
 - **OpenAPI 3.0** — served at `/docs-json`, or written to a file from the CLI
+- **Deep DTO fidelity** — inheritance chains, `PartialType`/`PickType`/`OmitType`/`IntersectionType`, `class-validator` constraints, and error responses recovered from `throw` statements
 - **Typed client SDK** — real interfaces from your DTOs, native `fetch`, zero runtime deps
 - **Postman collection** — one command, file pickers for uploads included
 - **Live mocking** — every route under `/scramble-mock/*` with realistic fake data

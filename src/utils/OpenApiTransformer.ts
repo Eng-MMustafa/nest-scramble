@@ -312,6 +312,29 @@ export class OpenApiTransformer {
       };
     }
 
+    // Errors thrown directly in the method body. These carry the method's own
+    // message, so they overwrite the blanket 400/500 defaults and the generic
+    // guard-derived 401 above.
+    for (const error of method.errorResponses ?? []) {
+      const status = String(error.status);
+
+      operation.responses[status] = {
+        description: error.description,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                statusCode: { type: 'number', example: error.status },
+                message: { type: 'string', example: error.description },
+                error: { type: 'string' },
+              },
+            },
+          },
+        },
+      };
+    }
+
     if (method.description) {
       operation.description = method.description;
     }
