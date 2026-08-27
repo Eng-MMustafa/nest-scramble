@@ -148,7 +148,17 @@ export class DtoAnalyzer {
             // appear in `decl.members`.
             const properties = this.extractPropertiesOfType(type);
             // Use the class/interface name instead of full type text
-            const className = decl.name?.text || symbol.getName() || typeText;
+            let className = decl.name?.text || symbol.getName() || typeText;
+
+            // An instantiated generic keeps its arguments in the name, so
+            // `PaginatedDto<ProductDto>` and `PaginatedDto<UserDto>` stay
+            // distinguishable. `typeToString` alone prints just the bare
+            // class name for both.
+            const typeArgs = this.typeArguments(type);
+            if (typeArgs.length > 0 && typeArgs.every(arg => !arg.isTypeParameter())) {
+              className = `${className}<${typeArgs.map(arg => this.typeText(arg)).join(', ')}>`;
+            }
+
             return {
               type: className,
               isArray: false,

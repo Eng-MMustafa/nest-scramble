@@ -2,6 +2,7 @@
 import { ControllerInfo, MethodInfo, ParameterInfo } from '../scanner/ScannerService';
 import { AnalyzedType, PropertyInfo } from '../utils/DtoAnalyzer';
 import { FileFieldInfo } from '../utils/FileUploadExtractor';
+import { sanitizeTypeName } from '../utils/SchemaName';
 
 /**
  * Read once, from the package itself. A literal default here goes stale at the next
@@ -34,6 +35,10 @@ export class TypedClientGenerator {
     // Emit real interfaces reconstructed from the scanned DTO shapes, so the
     // generated client is actually type safe. Emitting `{ [key: string]: unknown }`
     // stubs would compile but silently accept any property.
+    this.assignedNames.clear();
+    this.fingerprintByName.clear();
+    this.firstNameByBase.clear();
+
     const dtoShapes = this.collectDtoShapes(controllers);
     const enums = this.collectEnums(controllers);
 
@@ -265,28 +270,76 @@ export class TypedClientGenerator {
   // ---------------------------------------------------------------------------
 
   /**
+   * Maps `sanitizedBase|shapeFingerprint` to the emitted interface name, so
+   * two DTOs that share a class name but not a shape get distinct interfaces
+   * instead of the richer one silently winning.
+   */
+  private readonly assignedNames = new Map<string, string>();
+  private readonly fingerprintByName = new Map<string, string>();
+  /** First name assigned per base, the fallback for cycle-truncated references. */
+  private readonly firstNameByBase = new Map<string, string>();
+
+  /**
+   * Resolves the interface name a type is emitted (and referenced) under.
+   * Returns `null` for primitives and anonymous shapes, which keep their raw
+   * text.
+   */
+  private resolveTypeName(t: AnalyzedType): string | null {
+    const base = sanitizeTypeName(t.type.replace(/\[\]$/, ''));
+    if (!base || !this.isNamedType(base)) {
+      return null;
+    }
+
+    if (!t.properties || t.properties.length === 0) {
+      // Cycle-truncated or external reference: reuse whichever interface was
+      // assigned for this name first.
+      return this.firstNameByBase.get(base) ?? base;
+    }
+
+    const fingerprint = JSON.stringify(t.properties);
+    const key = `${base}|${fingerprint}`;
+
+    let assigned = this.assignedNames.get(key);
+    if (!assigned) {
+      assigned = base;
+      let suffix = 2;
+      while (this.fingerprintByName.has(assigned) && this.fingerprintByName.get(assigned) !== fingerprint) {
+        assigned = `${base}${suffix++}`;
+      }
+      this.assignedNames.set(key, assigned);
+      this.fingerprintByName.set(assigned, fingerprint);
+      if (!this.firstNameByBase.has(base)) {
+        this.firstNameByBase.set(base, assigned);
+      }
+    }
+
+    return assigned;
+  }
+
+  /**
    * Walks every scanned type and records the resolved property list for each
    * named object type, so real interfaces can be emitted.
    */
   private collectDtoShapes(controllers: ControllerInfo[]): Map<string, PropertyInfo[]> {
     const shapes = new Map<string, PropertyInfo[]>();
-    const seen = new Set<string>();
+    const unresolvedBases = new Set<string>();
 
     const visit = (t: AnalyzedType) => {
-      const base = t.type.replace(/\[\]$/, '');
+      const base = sanitizeTypeName(t.type.replace(/\[\]$/, ''));
 
-      if (this.isNamedType(base) && !t.enumValues) {
-        // Prefer the richest shape we encounter for a given name.
-        const existing = shapes.get(base);
-        const incoming = t.properties ?? [];
-        if (!existing || incoming.length > existing.length) {
-          shapes.set(base, incoming);
+      if (base && this.isNamedType(base) && !t.enumValues) {
+        if (t.properties && t.properties.length > 0) {
+          const assigned = this.resolveTypeName(t)!;
+          if (!shapes.has(assigned)) {
+            shapes.set(assigned, t.properties);
+          }
+        } else {
+          unresolvedBases.add(base);
         }
       }
 
-      if (t.properties && !seen.has(base)) {
-        seen.add(base);
-        for (const p of t.properties) visit(p.type);
+      for (const p of t.properties ?? []) {
+        visit(p.type);
       }
     };
 
@@ -294,6 +347,14 @@ export class TypedClientGenerator {
       for (const m of c.methods) {
         visit(m.returnType);
         for (const p of m.parameters) visit(p.type);
+      }
+    }
+
+    // Names that never resolved to a shape anywhere (e.g. external types) are
+    // still emitted, as `unknown`, so the client compiles.
+    for (const base of unresolvedBases) {
+      if (!this.firstNameByBase.has(base) && !shapes.has(base)) {
+        shapes.set(base, []);
       }
     }
 
@@ -348,6 +409,16 @@ export class TypedClientGenerator {
 
     let base = primitiveMap[t.type] ?? t.type;
     if (!base || base === '' || base === 'undefined' || base === 'null') base = 'unknown';
+
+    // Named object types are referenced under their assigned interface name,
+    // which may differ from the raw text (sanitized generics, deduplicated
+    // same-named DTOs).
+    if (!t.enumValues) {
+      const assigned = this.resolveTypeName(t);
+      if (assigned) {
+        base = assigned;
+      }
+    }
 
     return t.isArray ? `${base}[]` : base;
   }

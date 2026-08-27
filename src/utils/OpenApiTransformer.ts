@@ -3,6 +3,7 @@ import { ControllerInfo, MethodInfo } from '../scanner/ScannerService';
 import { AnalyzedType } from './DtoAnalyzer';
 import { ValidationConstraints } from './ValidationExtractor';
 import { buildRouteSegments, toOpenApiPath } from './RoutePath';
+import { sanitizeTypeName } from './SchemaName';
 
 /** Verbs that `@All()` expands to in the generated document. */
 const ALL_METHOD_VERBS = ['get', 'post', 'put', 'patch', 'delete'];
@@ -30,6 +31,12 @@ interface OpenApiSpec {
 
 export class OpenApiTransformer {
   private schemas: Record<string, any> = {};
+  /**
+   * Maps `name|fingerprint` to the component name actually assigned, so two
+   * DTOs that share a class name but not a shape get distinct entries instead
+   * of the first silently winning.
+   */
+  private assignedSchemaNames = new Map<string, string>();
   private baseUrl: string;
   private globalPrefix: string;
 
@@ -53,6 +60,7 @@ export class OpenApiTransformer {
    */
   transform(controllers: ControllerInfo[], title = 'NestJS API', version = '1.0.0', baseUrl = 'http://localhost:3000'): OpenApiSpec {
     this.schemas = {};
+    this.assignedSchemaNames.clear();
     const paths: Record<string, Record<string, any>> = {};
     const tags = controllers.map(controller => ({
       name: this.getControllerTagName(controller),
@@ -500,57 +508,86 @@ export class OpenApiTransformer {
     }
 
     if (type.properties) {
-      const schemaName = type.type || 'Object';
-      if (!this.schemas[schemaName]) {
-        const properties: Record<string, any> = {};
-        const required: string[] = [];
+      const schema = this.buildObjectSchema(type);
 
-        for (const prop of type.properties) {
-          const propSchema = this.applyValidation(
-            this.analyzedTypeToSchema(prop.type),
-            prop.validation,
-          );
-
-          // Add description from JSDoc if available
-          if (prop.description) {
-            propSchema.description = prop.description;
-          }
-          
-          // Add smart example based on property name (only for non-ref schemas)
-          if (!propSchema.$ref && !propSchema.example) {
-            propSchema.example = this.generateSmartExample(prop.name, prop.type.type, prop.type.enumValues);
-          }
-          
-          properties[prop.name] = propSchema;
-          
-          if (!prop.type.isOptional) {
-            required.push(prop.name);
-          }
-        }
-
-        // Create the schema with examples at the schema level
-        const schemaExample: Record<string, any> = {};
-        for (const prop of type.properties) {
-          // Include all required fields in example
-          if (!prop.type.isOptional) {
-            schemaExample[prop.name] = this.generateSmartExample(prop.name, prop.type.type, prop.type.enumValues);
-          }
-        }
-
-        this.schemas[schemaName] = {
-          type: 'object',
-          properties,
-          required: required.length > 0 ? required : undefined,
-          example: schemaExample,
-        };
+      // Anonymous shapes (inline object literals) have no usable name, so
+      // they are inlined instead of polluting the components section.
+      const baseName = sanitizeTypeName(type.type);
+      if (!baseName) {
+        return schema;
       }
 
-      return {
-        $ref: `#/components/schemas/${schemaName}`,
-      };
+      return { $ref: `#/components/schemas/${this.registerSchema(baseName, schema)}` };
     }
 
     return this.typeStringToSchema(type.type);
+  }
+
+  /**
+   * Registers a schema under `baseName`, appending a numeric suffix when a
+   * different shape already owns the name. Identical shapes are reused, so
+   * repeated references to the same DTO still collapse to one component.
+   */
+  private registerSchema(baseName: string, schema: any): string {
+    const fingerprint = JSON.stringify(schema);
+    const key = `${baseName}|${fingerprint}`;
+
+    let assigned = this.assignedSchemaNames.get(key);
+    if (!assigned) {
+      assigned = baseName;
+      let suffix = 2;
+      while (this.schemas[assigned] && JSON.stringify(this.schemas[assigned]) !== fingerprint) {
+        assigned = `${baseName}${suffix++}`;
+      }
+      this.schemas[assigned] = schema;
+      this.assignedSchemaNames.set(key, assigned);
+    }
+
+    return assigned;
+  }
+
+  private buildObjectSchema(type: AnalyzedType): any {
+    const properties: Record<string, any> = {};
+    const required: string[] = [];
+
+    for (const prop of type.properties!) {
+      const propSchema = this.applyValidation(
+        this.analyzedTypeToSchema(prop.type),
+        prop.validation,
+      );
+
+      // Add description from JSDoc if available
+      if (prop.description) {
+        propSchema.description = prop.description;
+      }
+
+      // Add smart example based on property name (only for non-ref schemas)
+      if (!propSchema.$ref && !propSchema.example) {
+        propSchema.example = this.generateSmartExample(prop.name, prop.type.type, prop.type.enumValues);
+      }
+
+      properties[prop.name] = propSchema;
+
+      if (!prop.type.isOptional) {
+        required.push(prop.name);
+      }
+    }
+
+    // Create the schema with examples at the schema level
+    const schemaExample: Record<string, any> = {};
+    for (const prop of type.properties!) {
+      // Include all required fields in example
+      if (!prop.type.isOptional) {
+        schemaExample[prop.name] = this.generateSmartExample(prop.name, prop.type.type, prop.type.enumValues);
+      }
+    }
+
+    return {
+      type: 'object',
+      properties,
+      required: required.length > 0 ? required : undefined,
+      example: schemaExample,
+    };
   }
 
   /**

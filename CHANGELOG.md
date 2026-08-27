@@ -9,6 +9,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 ## [Unreleased]
 
 ### Fixed
+- **Generic DTOs get legal, distinguishable schema names.** An instantiated
+  generic such as `PaginatedDto<ProductDto>` — the standard pagination
+  pattern — used the raw type text as its OpenAPI component name, and `<`/`>`
+  are forbidden there (`^[a-zA-Z0-9._-]+$`), so codegen tools rejected the
+  document. The typed client had it worse:
+  `export interface PaginatedDto<ProductDto>` declares a type *parameter*
+  named `ProductDto` instead of referencing the DTO. Instantiated generics are
+  now named after their arguments (`PaginatedDtoOfProductDto`) in both the
+  document and the generated client, and `PaginatedDto<UserDto>` vs
+  `PaginatedDto<OrderDto>` no longer collapse into one name.
+- **Same-named DTOs from different modules no longer collide.** Two classes
+  called `StatusDto` in different folders used to fight over one schema: the
+  first won in the OpenAPI document and the *richer* one won in the typed
+  client, so endpoints were silently documented with the wrong shape. Distinct
+  shapes now get distinct names (`StatusDto`, `StatusDto2`) and every
+  reference points at the right one. Anonymous inline object types are inlined
+  instead of polluting the components section.
 - **DTO inheritance no longer loses properties.** The analyzer read only a
   class declaration's *own* members, so `class CreateUserDto extends BaseDto`
   silently dropped every inherited property, and the `@nestjs/mapped-types`
