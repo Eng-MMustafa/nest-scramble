@@ -51,4 +51,14 @@ export class UsersController {
   deleteUser(@Param('id') id: string, @Headers('x-request-id') requestId?: string): void {
     return undefined;
   }
+
+  /** Returns an envelope whose type is inferred, never annotated. */
+  @Get('stats/summary')
+  getStats() {
+    return {
+      total: 42,
+      active: 40,
+      items: [] as UserDto[],
+    };
+  }
 }

@@ -282,6 +282,28 @@ describe('CLI (e2e)', () => {
     });
   });
 
+  describe('test --generate', () => {
+    it('writes runnable scenario files derived from the source', () => {
+      const outDir = path.join(workDir, 'scenarios');
+      const result = runCli(['test', 'test/fixtures/sample-app', '--generate', '-o', outDir]);
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain('scenario(s) generated');
+
+      const files = fs.readdirSync(outDir).filter((f) => f.endsWith('.scenario.json'));
+      expect(files.length).toBeGreaterThan(0);
+
+      const scenario = JSON.parse(fs.readFileSync(path.join(outDir, files[0]), 'utf-8'));
+      expect(Array.isArray(scenario.steps)).toBe(true);
+      expect(scenario.steps.length).toBeGreaterThan(0);
+
+      // Create comes first and captures the id for the /:id steps.
+      const create = scenario.steps.find((s: any) => s.request.method === 'POST');
+      expect(create.request.body).toBeDefined();
+      expect(create.capture).toBeDefined();
+    });
+  });
+
   describe('init', () => {
     const bareModule = [
       "import { Module } from '@nestjs/common';",

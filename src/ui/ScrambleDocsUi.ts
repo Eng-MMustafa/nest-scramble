@@ -54,10 +54,10 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
     <div class="topbar-actions">
       <input type="search" id="search" class="search" placeholder="Search requests…" autocomplete="off" />
       <select id="env-select" class="env-select" title="Environment"></select>
-      <button type="button" class="btn-ghost" id="auth-btn">🔑 Auth</button>
-      <button type="button" class="btn-ghost" id="export-postman">⬇ Postman</button>
-      <a class="btn-ghost" id="spec-link" href="${specUrl}" target="_blank" rel="noopener">OpenAPI</a>
-      <button type="button" class="btn-ghost" id="theme-toggle" aria-label="Toggle theme">◐</button>
+      <button type="button" class="btn-ghost" id="auth-btn" aria-label="Global authorization"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>Auth</button>
+      <button type="button" class="btn-ghost" id="export-postman" aria-label="Export Postman collection"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Postman</button>
+      <a class="btn-ghost" id="spec-link" href="${specUrl}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>OpenAPI</a>
+      <button type="button" class="btn-ghost btn-theme" id="theme-toggle" aria-label="Toggle theme"><svg class="icon-sun" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><svg class="icon-moon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
     </div>
     <div class="auth-pop" id="auth-pop" hidden>
       <div class="auth-title">Global Authorization <span class="dim">(default for every request)</span></div>
@@ -99,7 +99,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
   <div class="layout">
     <nav class="sidebar">
       <button type="button" class="overview-link active" id="overview-link">
-        <span class="ov-icon">⌂</span> Overview
+        <svg class="ov-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Overview
       </button>
       <div class="side-tabs">
         <button type="button" class="side-tab active" data-side="collections">Collections</button>
@@ -208,10 +208,9 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
         </div>
         <div class="ws-compose">
           <input id="ws-event-name" class="ws-event-input" placeholder="event" spellcheck="false" autocomplete="off" />
-          <button type="button" class="btn-send" id="ws-send" disabled>Send</button>
+          <button type="button" class="btn-send" id="ws-send">Send</button>
         </div>
-        <textarea class="body-editor" id="ws-payload" rows="8" spellcheck="false"></textarea>
-        <div class="ws-doc" id="ws-doc"></div>
+        <textarea class="body-editor plain-editor" id="ws-payload" rows="6" spellcheck="false"></textarea>
         <div class="resp">
           <div class="resp-head">
             <div class="resp-tabs">
@@ -224,6 +223,38 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
             <div class="resp-empty">Connect and send an event to see live traffic here.</div>
           </div>
         </div>
+        <div class="ws-doc" id="ws-doc"></div>
+      </section>
+      <section id="gql-view" hidden>
+        <div class="crumbs">
+          <button type="button" class="crumb-link" id="gql-crumb-overview">Overview</button>
+          <span class="crumb-sep">›</span>
+          <span class="crumb" id="gql-crumb-resolver"></span>
+          <span class="crumb-sep">›</span>
+          <b class="crumb" id="gql-crumb-op"></b>
+        </div>
+        <div class="req-bar">
+          <span class="method method-gql" id="gql-kind">QUERY</span>
+          <input class="url-input" id="gql-url" spellcheck="false" autocomplete="off" />
+          <button type="button" class="btn-send" id="gql-run">Run</button>
+        </div>
+        <div class="req-summary">
+          <span id="gql-summary" class="dim"></span>
+        </div>
+        <h4 class="gql-label">Operation</h4>
+        <textarea class="body-editor plain-editor gql-editor" id="gql-query" rows="10" spellcheck="false"></textarea>
+        <h4 class="gql-label">Variables <span class="dim">(JSON, optional)</span></h4>
+        <textarea class="body-editor plain-editor" id="gql-variables" rows="3" spellcheck="false"></textarea>
+        <div class="resp">
+          <div class="resp-head">
+            <div class="resp-tabs"><span class="resp-title">Response</span></div>
+            <span class="resp-meta" id="gql-meta"></span>
+          </div>
+          <div class="resp-panel" id="gql-resp">
+            <div class="resp-empty">Hit <b>Run</b> to execute the operation against your GraphQL endpoint.</div>
+          </div>
+        </div>
+        <div class="ws-doc" id="gql-doc"></div>
       </section>
     </main>
   </div>
@@ -504,10 +535,14 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       return schema;
     }
 
-    function exampleOf(schema, depth) {
+    function exampleOf(schema, depth, name) {
       schema = resolveRef(schema, 0);
       if (!schema || depth > 8) return null;
-      if (schema.example !== undefined) return schema.example;
+      // Object schemas are always assembled from their properties: the
+      // document-level example only covers scalars, and trusting it produced
+      // request bodies with missing required fields.
+      var assembles = schema.properties && Object.keys(schema.properties).length;
+      if (schema.example !== undefined && !assembles) return schema.example;
       if (schema.enum && schema.enum.length) return schema.enum[0];
 
       switch (schema.type) {
@@ -515,30 +550,42 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
           var out = {};
           var props = schema.properties || {};
           Object.keys(props).forEach(function (key) {
-            out[key] = exampleOf(props[key], depth + 1);
+            out[key] = exampleOf(props[key], depth + 1, key);
           });
           return out;
         }
         case 'array':
-          return [exampleOf(schema.items || {}, depth + 1)];
+          return [exampleOf(schema.items || {}, depth + 1, name)];
         case 'integer':
         case 'number':
           if (schema.minimum !== undefined) return schema.minimum;
           return schema.type === 'integer' ? 1 : 1.5;
         case 'boolean':
           return true;
-        case 'string':
+        case 'string': {
           if (schema.format === 'date-time') return new Date().toISOString();
           if (schema.format === 'date') return new Date().toISOString().slice(0, 10);
           if (schema.format === 'email') return 'user@example.com';
           if (schema.format === 'uuid') return '00000000-0000-4000-8000-000000000000';
           if (schema.format === 'uri' || schema.format === 'url') return 'https://example.com';
+          // Realistic values from the property name, so consoles are
+          // pre-filled with data that actually exercises the API.
+          var n = String(name || '').toLowerCase();
+          if (n.indexOf('email') !== -1) return 'user@example.com';
+          if (n.indexOf('password') !== -1) return 'SecurePassword123!';
+          if (n.indexOf('text') !== -1 || n.indexOf('message') !== -1 || n.indexOf('body') !== -1 || n.indexOf('comment') !== -1) return 'Hello from the docs console 👋';
+          if (n.indexOf('title') !== -1 || n.indexOf('subject') !== -1) return 'Order shipped';
+          if (n.indexOf('user') !== -1 || n.indexOf('author') !== -1 || n.indexOf('name') !== -1) return 'amira';
+          if (n.indexOf('url') !== -1 || n.indexOf('link') !== -1) return 'https://example.com';
+          if (n.indexOf('phone') !== -1) return '+15550100';
+          if (n.indexOf('date') !== -1 || n.indexOf('time') !== -1 || /at$/.test(n)) return new Date().toISOString();
           return 'string';
+        }
         default:
-          if (schema.oneOf && schema.oneOf.length) return exampleOf(schema.oneOf[0], depth + 1);
-          if (schema.anyOf && schema.anyOf.length) return exampleOf(schema.anyOf[0], depth + 1);
-          if (schema.allOf && schema.allOf.length) return exampleOf(schema.allOf[0], depth + 1);
-          if (schema.properties) { schema.type = 'object'; return exampleOf(schema, depth); }
+          if (schema.oneOf && schema.oneOf.length) return exampleOf(schema.oneOf[0], depth + 1, name);
+          if (schema.anyOf && schema.anyOf.length) return exampleOf(schema.anyOf[0], depth + 1, name);
+          if (schema.allOf && schema.allOf.length) return exampleOf(schema.allOf[0], depth + 1, name);
+          if (schema.properties) { schema.type = 'object'; return exampleOf(schema, depth, name); }
           return null;
       }
     }
@@ -630,11 +677,11 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
 
     function bodyInfo(op) {
       var rb = op.requestBody;
-      if (!rb || !rb.content) return { contentType: null, schema: null, example: null };
+      if (!rb || !rb.content) return { contentType: null, schema: null, example: null, isMultipart: false };
       var ct = Object.keys(rb.content)[0];
       var schema = rb.content[ct].schema || null;
       var example = ct === 'application/json' && schema ? exampleOf(schema, 0) : null;
-      return { contentType: ct, schema: schema, example: example };
+      return { contentType: ct, schema: schema, example: example, isMultipart: ct === 'multipart/form-data' };
     }
 
     function baseUrl() {
@@ -653,6 +700,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       byId('welcome').hidden = false;
       byId('request-view').hidden = true;
       byId('ws-view').hidden = true;
+      byId('gql-view').hidden = true;
       byId('overview-link').classList.add('active');
       var active = document.querySelector('.nav-item.active');
       if (active) active.classList.remove('active');
@@ -846,6 +894,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       byId('welcome').hidden = true;
       byId('request-view').hidden = false;
       byId('ws-view').hidden = true;
+      byId('gql-view').hidden = true;
 
       byId('crumb-group').textContent = item.tag;
       byId('crumb-name').textContent = item.op.summary || item.path;
@@ -862,7 +911,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       byId('req-chips').innerHTML = chips;
 
       var body = bodyInfo(item.op);
-      bodyMode = body.contentType ? 'raw' : 'none';
+      bodyMode = body.isMultipart ? 'form' : body.contentType ? 'raw' : 'none';
       renderParamsPanel(item);
       renderAuthPanel();
       renderHeadersPanel();
@@ -1091,6 +1140,13 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
           '<span class="kv-fixed">' + esc(body.contentType) + '</span>' +
           '<span class="kv-desc">auto — from request body</span></div>';
       }
+      if (bodyMode === 'form') {
+        autoCount++;
+        autoRows += '<div class="kv-row kv-auto">' + checkCell(true, true) +
+          '<span class="kv-key">Content-Type</span>' +
+          '<span class="kv-fixed">multipart/form-data; boundary=…</span>' +
+          '<span class="kv-desc">auto — set by the browser</span></div>';
+      }
       if (auth.mode === 'bearer' && auth.token) {
         autoCount++;
         autoRows += '<div class="kv-row kv-auto">' + checkCell(true, true) +
@@ -1133,33 +1189,94 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       appendGhostRow(byId('headers-table'), 'header');
     }
 
-    /* ---- Body panel: mode selector (none / raw JSON) ---- */
+    /* ---- Body panel: mode selector (none / form-data / raw JSON) ---- */
+
+    /** Flattens a multipart schema into rows the form-data table can render. */
+    function formFieldsOf(schema) {
+      var props = (schema && schema.properties) || {};
+      var required = (schema && schema.required) || [];
+      return Object.keys(props).map(function (name) {
+        var p = props[name] || {};
+        var isFile = p.format === 'binary' ||
+          (p.type === 'array' && p.items && p.items.format === 'binary');
+        return {
+          name: name,
+          isFile: isFile,
+          multiple: p.type === 'array',
+          required: required.indexOf(name) !== -1,
+          description: p.description || (p.maxItems ? 'up to ' + p.maxItems + ' files' : ''),
+          schema: p,
+        };
+      });
+    }
 
     function renderBodyPanel(body) {
       var panel = byId('panel-body');
-      var rawChecked = bodyMode === 'raw' ? ' checked' : '';
-      var noneChecked = bodyMode === 'none' ? ' checked' : '';
+      var fields = body.isMultipart ? formFieldsOf(body.schema) : [];
+
+      var fieldRows = fields.map(function (f) {
+        var control;
+        if (f.isFile) {
+          control =
+            '<span class="file-cell">' +
+              '<select class="file-src" aria-label="File source">' +
+                '<option value="file">File</option>' +
+                '<option value="url">URL</option>' +
+                '<option value="base64">Base64</option>' +
+              '</select>' +
+              '<input type="file" class="file-input" id="file-' + esc(f.name) + '"' + (f.multiple ? ' multiple' : '') + ' hidden />' +
+              '<button type="button" class="btn-add file-btn" data-for="file-' + esc(f.name) + '">Select file' + (f.multiple ? 's' : '') + '</button>' +
+              '<span class="file-names dim">No file selected</span>' +
+              '<input class="kv-input file-url" placeholder="https://example.com/image.png" hidden />' +
+              '<textarea class="kv-input file-b64" rows="2" spellcheck="false" placeholder="data:image/png;base64,… or raw base64" hidden></textarea>' +
+            '</span>';
+        } else {
+          control = '<input class="kv-input" placeholder="' + esc(typeLabel(f.schema) || 'value') + '" />';
+        }
+        return '<div class="kv-row" data-name="' + esc(f.name) + '"' + (f.isFile ? ' data-file="1"' : '') + '>' +
+          checkCell(true, false) +
+          '<span class="kv-key">' + esc(f.name) + (f.required ? '<i class="req">*</i>' : '') +
+            (f.isFile ? ' <span class="chip chip-filetag">file</span>' : '') + '</span>' +
+          control +
+          '<span class="kv-desc">' + esc(f.description) + '</span>' +
+        '</div>';
+      }).join('');
 
       panel.innerHTML =
-        '<div class="body-bar">' +
-          '<label class="body-mode"><input type="radio" name="body-mode" value="none"' + noneChecked + ' /> none</label>' +
-          '<label class="body-mode"><input type="radio" name="body-mode" value="raw"' + rawChecked + ' /> raw</label>' +
+        '<div class="body-bar" role="radiogroup" aria-label="Body mode">' +
+          '<label class="body-mode"><input type="radio" name="body-mode" value="none"' + (bodyMode === 'none' ? ' checked' : '') + ' /> none</label>' +
+          (body.isMultipart
+            ? '<label class="body-mode"><input type="radio" name="body-mode" value="form"' + (bodyMode === 'form' ? ' checked' : '') + ' /> form-data</label>'
+            : '') +
+          '<label class="body-mode"><input type="radio" name="body-mode" value="raw"' + (bodyMode === 'raw' ? ' checked' : '') + ' /> raw</label>' +
           '<select class="raw-lang" id="raw-lang"' + (bodyMode === 'raw' ? '' : ' hidden') + '><option>JSON</option></select>' +
           '<span class="chip">' + esc(body.contentType || 'application/json') + '</span>' +
           '<span class="chip" id="json-valid" hidden></span>' +
           '<button type="button" class="btn-add" id="beautify-body"' + (bodyMode === 'raw' ? '' : ' hidden') + '>Beautify</button>' +
         '</div>' +
-        '<textarea class="body-editor" id="body-editor" rows="12" spellcheck="false"' + (bodyMode === 'raw' ? '' : ' hidden') + '>' +
-          esc(body.example !== null ? JSON.stringify(body.example, null, 2) : '') +
-        '</textarea>' +
-        (bodyMode === 'none' ? '<div class="panel-empty" id="body-none-note">This request has no body.</div>' : '');
+        '<div class="kv-table form-table" id="form-table"' + (bodyMode === 'form' ? '' : ' hidden') + '>' +
+          '<div class="kv-row kv-header-row">' +
+            '<span class="kv-check-cell"></span>' +
+            '<span class="kv-head">Key</span><span class="kv-head">Value</span><span class="kv-head">Description</span>' +
+          '</div>' +
+          fieldRows +
+        '</div>' +
+        '<div class="editor-wrap" id="editor-wrap"' + (bodyMode === 'raw' ? '' : ' hidden') + '>' +
+          '<pre class="body-highlight" id="body-highlight" aria-hidden="true"></pre>' +
+          '<textarea class="body-editor" id="body-editor" rows="12" spellcheck="false">' +
+            esc(body.example !== null ? JSON.stringify(body.example, null, 2) : '') +
+          '</textarea>' +
+        '</div>' +
+        '<div class="panel-empty" id="body-none-note"' + (bodyMode === 'none' ? '' : ' hidden') + '>This request has no body.</div>';
 
       panel.querySelectorAll('input[name=body-mode]').forEach(function (radio) {
         radio.addEventListener('change', function () {
           bodyMode = this.value;
-          byId('body-editor').hidden = bodyMode !== 'raw';
+          byId('editor-wrap').hidden = bodyMode !== 'raw';
           byId('beautify-body').hidden = bodyMode !== 'raw';
           byId('raw-lang').hidden = bodyMode !== 'raw';
+          var form = byId('form-table');
+          if (form) form.hidden = bodyMode !== 'form';
           var note = byId('body-none-note');
           if (note) note.hidden = bodyMode !== 'none';
           validateBody();
@@ -1167,14 +1284,78 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
         });
       });
 
+      panel.querySelectorAll('.file-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          byId(btn.getAttribute('data-for')).click();
+        });
+      });
+
+      panel.querySelectorAll('.file-input').forEach(function (input) {
+        input.addEventListener('change', function () {
+          var row = input.closest('.kv-row');
+          var label = row.querySelector('.file-names');
+          if (!input.files.length) {
+            label.textContent = 'No file selected';
+            label.classList.add('dim');
+            return;
+          }
+          var names = [];
+          var total = 0;
+          for (var i = 0; i < input.files.length; i++) {
+            names.push(input.files[i].name);
+            total += input.files[i].size;
+          }
+          label.textContent = names.join(', ') + ' · ' + formatSize(total);
+          label.classList.remove('dim');
+          var check = row.querySelector('.kv-check');
+          if (check) check.checked = true;
+        });
+      });
+
+      panel.querySelectorAll('.file-src').forEach(function (sel) {
+        sel.addEventListener('change', function () {
+          var cell = sel.closest('.file-cell');
+          cell.querySelector('.file-btn').hidden = sel.value !== 'file';
+          cell.querySelector('.file-names').hidden = sel.value !== 'file';
+          cell.querySelector('.file-url').hidden = sel.value !== 'url';
+          cell.querySelector('.file-b64').hidden = sel.value !== 'base64';
+        });
+      });
+
+      panel.querySelectorAll('.file-url, .file-b64').forEach(function (input) {
+        input.addEventListener('input', function () {
+          var check = input.closest('.kv-row').querySelector('.kv-check');
+          if (check) check.checked = !!input.value.trim();
+        });
+      });
+
+      if (body.isMultipart) appendGhostRow(byId('form-table'), 'form');
+
+      // The textarea itself is transparent; this keeps the highlight layer
+      // underneath it in sync so the raw body gets full JSON colouring.
+      function syncHighlight() {
+        var editor = byId('body-editor');
+        var hl = byId('body-highlight');
+        if (!editor || !hl) return;
+        hl.innerHTML = hljson(editor.value) + '\\n';
+        hl.scrollTop = editor.scrollTop;
+        hl.scrollLeft = editor.scrollLeft;
+      }
+
       byId('beautify-body').addEventListener('click', function () {
         var editor = byId('body-editor');
         try { editor.value = JSON.stringify(JSON.parse(editor.value), null, 2); } catch (e) { /* leave as-is */ }
         validateBody();
+        syncHighlight();
       });
 
-      byId('body-editor').addEventListener('input', validateBody);
+      byId('body-editor').addEventListener('input', function () {
+        validateBody();
+        syncHighlight();
+      });
+      byId('body-editor').addEventListener('scroll', syncHighlight);
       validateBody();
+      syncHighlight();
     }
 
     /** Live JSON validity badge for the raw body editor. */
@@ -1274,10 +1455,47 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       applyEffectiveAuth(headers);
 
       var body = null;
+      var form = null;
       var bodyEditor = byId('body-editor');
       if (bodyMode === 'raw' && bodyEditor && !bodyEditor.hidden && bodyEditor.value.trim()) {
         body = bodyEditor.value;
         headers['Content-Type'] = bodyInfo(current.op).contentType || 'application/json';
+      } else if (bodyMode === 'form') {
+        // Content-Type is deliberately NOT set here: the browser generates
+        // the multipart boundary itself, and a manual value would break it.
+        form = [];
+        document.querySelectorAll('#form-table .kv-row').forEach(function (row) {
+          if (row.classList.contains('kv-header-row')) return;
+          var check = row.querySelector('.kv-check');
+          if (!check || !check.checked) return;
+          var fileInput = row.querySelector('.file-input');
+          if (fileInput) {
+            var key = row.getAttribute('data-name');
+            var srcSel = row.querySelector('.file-src');
+            var mode = srcSel ? srcSel.value : 'file';
+            if (mode === 'file' && fileInput.files.length) {
+              form.push({ key: key, files: Array.prototype.slice.call(fileInput.files) });
+            } else if (mode === 'url') {
+              var urlInput = row.querySelector('.file-url');
+              if (urlInput && urlInput.value.trim()) form.push({ key: key, url: applyVars(urlInput.value.trim()) });
+            } else if (mode === 'base64') {
+              var b64Input = row.querySelector('.file-b64');
+              if (b64Input && b64Input.value.trim()) form.push({ key: key, base64: b64Input.value.trim() });
+            }
+            return;
+          }
+          var name = row.getAttribute('data-name');
+          if (name) {
+            var input = row.querySelector('.kv-input');
+            if (input && input.value) form.push({ key: name, value: applyVars(input.value) });
+          } else {
+            var keyInput = row.querySelector('.kv-custom-key');
+            var valueInput = row.querySelector('.kv-custom-value');
+            if (keyInput && keyInput.value && valueInput && valueInput.value) {
+              form.push({ key: keyInput.value, value: applyVars(valueInput.value) });
+            }
+          }
+        });
       }
 
       // Relative URLs are fetched against the page origin, which is always
@@ -1289,8 +1507,57 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
         url = env.baseUrl.replace(/\\/+$/, '') + url;
       }
       Object.keys(headers).forEach(function (key) { headers[key] = applyVars(headers[key]); });
-      if (body) body = applyVars(body);
-      return { url: url, headers: headers, body: body };
+      if (body && typeof body === 'string') body = applyVars(body);
+      return { url: url, headers: headers, body: body, form: form };
+    }
+
+    /** Best-effort filename for a blob downloaded from a URL. */
+    function fileNameFromUrl(u) {
+      try {
+        var name = new URL(u, location.href).pathname.split('/').pop();
+        return name || 'file';
+      } catch (e) { return 'file'; }
+    }
+
+    /**
+     * Assembles the multipart payload. Async because URL sources are fetched
+     * and base64 sources are decoded through a data-URL fetch, which also
+     * validates the encoding.
+     */
+    function buildFormData(form) {
+      var fd = new FormData();
+      var any = false;
+      var jobs = form.map(function (entry) {
+        if (entry.files) {
+          entry.files.forEach(function (file) { fd.append(entry.key, file); any = true; });
+          return Promise.resolve();
+        }
+        if (entry.url) {
+          return fetch(entry.url).then(function (res) {
+            if (!res.ok) throw new Error('Could not download ' + entry.url + ' (HTTP ' + res.status + ')');
+            return res.blob();
+          }).then(function (blob) {
+            fd.append(entry.key, blob, fileNameFromUrl(entry.url));
+            any = true;
+          });
+        }
+        if (entry.base64 !== undefined) {
+          var data = entry.base64.indexOf('data:') === 0
+            ? entry.base64
+            : 'data:application/octet-stream;base64,' + entry.base64.replace(/\\s+/g, '');
+          return fetch(data).then(function (res) { return res.blob(); }).then(function (blob) {
+            var ext = (blob.type.split('/')[1] || 'bin').split('+')[0];
+            fd.append(entry.key, blob, 'file.' + ext);
+            any = true;
+          }).catch(function () {
+            throw new Error('Invalid base64 for field "' + entry.key + '"');
+          });
+        }
+        fd.append(entry.key, entry.value);
+        any = true;
+        return Promise.resolve();
+      });
+      return Promise.all(jobs).then(function () { return any ? fd : null; });
     }
 
     /* ------------------------------------------------------------------ *
@@ -1311,17 +1578,60 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       Object.keys(req.headers).forEach(function (key) {
         lines.push("  -H '" + key + ": " + req.headers[key] + "'");
       });
-      if (req.body) {
+      if (req.form) {
+        req.form.forEach(function (entry) {
+          if (entry.files) {
+            entry.files.forEach(function (file) {
+              lines.push("  -F '" + entry.key + '=@"' + file.name + '"' + "'");
+            });
+          } else if (entry.url) {
+            lines.push("  -F '" + entry.key + '=@"' + fileNameFromUrl(entry.url) + '"' + "'");
+          } else if (entry.base64 !== undefined) {
+            lines.push("  -F '" + entry.key + '=@"file.bin"' + "'");
+          } else {
+            lines.push("  -F '" + entry.key + '=' + entry.value + "'");
+          }
+        });
+      } else if (req.body && typeof req.body === 'string') {
         lines.push("  -d '" + req.body.replace(/'/g, "'\\\\''") + "'");
       }
       return lines.join(' \\\\\\n');
     }
 
+    /** Shared FormData construction lines for the fetch and axios snippets. */
+    function formDataLines(form) {
+      var lines = ['const formData = new FormData();'];
+      form.forEach(function (entry) {
+        if (entry.files) {
+          entry.files.forEach(function (file, index) {
+            lines.push("formData.append('" + entry.key + "', fileInput.files[" + index + ']); // ' + file.name);
+          });
+        } else if (entry.url) {
+          lines.push("formData.append('" + entry.key + "', await (await fetch('" + entry.url + "')).blob(), '" + fileNameFromUrl(entry.url) + "');");
+        } else if (entry.base64 !== undefined) {
+          lines.push("formData.append('" + entry.key + "', await (await fetch(base64DataUrl)).blob()); // decode your base64 data URL");
+        } else {
+          lines.push("formData.append('" + entry.key + "', '" + entry.value + "');");
+        }
+      });
+      return lines;
+    }
+
     function snippetFetch(req, method) {
+      if (req.form) {
+        var headerPart = Object.keys(req.headers).length
+          ? '  headers: ' + JSON.stringify(req.headers, null, 2).replace(/\\n/g, '\\n  ') + ',\\n'
+          : '';
+        return formDataLines(req.form).join('\\n') + '\\n\\n' +
+          "const response = await fetch('" + absolute(req.url) + "', {\\n" +
+          "  method: '" + method + "',\\n" + headerPart +
+          '  body: formData,\\n});\\n' +
+          'const data = await response.json();\\nconsole.log(data);';
+      }
       var opts = { method: method };
       if (Object.keys(req.headers).length) opts.headers = req.headers;
       var optsJson = JSON.stringify(opts, null, 2);
-      if (req.body) {
+      if (req.body && typeof req.body === 'string') {
         optsJson = optsJson.replace(/\\n}$/, ',\\n  "body": JSON.stringify(' + req.body.replace(/\\n/g, '\\n  ') + ')\\n}');
       }
       return "const response = await fetch('" + absolute(req.url) + "', " + optsJson + ');\\n' +
@@ -1333,8 +1643,12 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       if (Object.keys(req.headers).length) {
         config = ', {\\n  headers: ' + JSON.stringify(req.headers, null, 2).replace(/\\n/g, '\\n  ') + '\\n}';
       }
-      var dataArg = req.body ? ', ' + req.body.replace(/\\n/g, '\\n') : '';
       var m = method.toLowerCase();
+      if (req.form && m !== 'get' && m !== 'delete' && m !== 'head' && m !== 'options') {
+        return formDataLines(req.form).join('\\n') + '\\n\\n' +
+          "const { data } = await axios." + m + "('" + absolute(req.url) + "', formData" + config + ');\\nconsole.log(data);';
+      }
+      var dataArg = req.body && typeof req.body === 'string' ? ', ' + req.body.replace(/\\n/g, '\\n') : '';
       if (m === 'get' || m === 'delete' || m === 'head' || m === 'options') {
         return "const { data } = await axios." + m + "('" + absolute(req.url) + "'" + config + ');\\nconsole.log(data);';
       }
@@ -1377,7 +1691,10 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       document.querySelectorAll('.rtab').forEach(function (tab) {
         tab.classList.toggle('active', tab.getAttribute('data-rtab') === name);
       });
-      document.querySelectorAll('.resp-panel').forEach(function (panel) {
+      // Scoped to the REST view: the WS events log and the GraphQL response
+      // are .resp-panel too, and the global selector used to hide them for
+      // good the moment any REST request was opened.
+      document.querySelectorAll('#request-view .resp-panel').forEach(function (panel) {
         panel.hidden = panel.getAttribute('data-rpanel') !== name;
       });
     }
@@ -1409,8 +1726,6 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
     function send() {
       if (!current) return;
       var req = collectRequest();
-      var init = { method: current.method.toUpperCase(), headers: req.headers };
-      if (req.body) init.body = req.body;
 
       var metaEl = byId('resp-meta');
       var bodyEl = byId('resp-body');
@@ -1425,7 +1740,12 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
         sendBtn.textContent = 'Send';
       }
 
-      fetch(req.url, init).then(function (res) {
+      var payload = req.form ? buildFormData(req.form) : Promise.resolve(req.body);
+      payload.then(function (bodyPayload) {
+        var init = { method: current.method.toUpperCase(), headers: req.headers };
+        if (bodyPayload) init.body = bodyPayload;
+        return fetch(req.url, init);
+      }).then(function (res) {
         return res.text().then(function (text) {
           restoreSend();
           var ms = Math.round(performance.now() - started);
@@ -1498,9 +1818,10 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
           bodyMode = 'raw';
           var raw = document.querySelector('#panel-body input[value=raw]');
           if (raw) raw.checked = true;
-          editor.hidden = false;
+          var wrap = byId('editor-wrap');
+          if (wrap) wrap.hidden = false;
           editor.value = state.b;
-          validateBody();
+          editor.dispatchEvent(new Event('input'));
           renderHeadersPanel();
         }
       }
@@ -1561,7 +1882,17 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
               return { key: p.name, value: '', description: p.description || '' };
             });
           }
-          if (body.contentType) {
+          if (body.isMultipart) {
+            // No Content-Type header: Postman generates the boundary itself.
+            request.body = {
+              mode: 'formdata',
+              formdata: formFieldsOf(body.schema).map(function (f) {
+                return f.isFile
+                  ? { key: f.key || f.name, type: 'file', src: [] }
+                  : { key: f.name, type: 'text', value: '' };
+              }),
+            };
+          } else if (body.contentType) {
             request.header.push({ key: 'Content-Type', value: body.contentType });
             if (body.example !== null) {
               request.body = {
@@ -1604,12 +1935,20 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       return origin + (gateway.namespace || '');
     }
 
+    var wsState = 'disconnected';
+    var wsPendingSend = false;
+
     function setWsStatus(state) {
+      wsState = state;
       var chip = byId('ws-status');
       chip.textContent = state;
       chip.className = 'chip ' + (state === 'connected' ? 'chip-ok' : state === 'error' ? 'chip-err' : '');
-      byId('ws-send').disabled = state !== 'connected';
       byId('ws-connect').textContent = state === 'connected' ? 'Disconnect' : 'Connect';
+      if (state === 'connected' && wsPendingSend) {
+        wsPendingSend = false;
+        wsDoSend();
+      }
+      if (state === 'error') wsPendingSend = false;
     }
 
     function wsLog(direction, name, data) {
@@ -1631,6 +1970,13 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       '</div>');
       log.insertBefore(row, log.firstChild);
       while (log.children.length > 100) log.removeChild(log.lastChild);
+      var count = log.querySelectorAll('.ws-log-row').length;
+      byId('ws-meta').textContent = count + ' event' + (count === 1 ? '' : 's') + ' · live';
+      // Sends and connection changes are user actions — the log lives below
+      // the schema docs, so bring the new entry into view.
+      if (direction !== 'in') {
+        log.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     }
 
     function loadSocketIo(callback) {
@@ -1705,10 +2051,13 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       else wsConnect();
     });
 
-    byId('ws-send').addEventListener('click', function () {
+    function wsDoSend() {
       if (!wsConn) return;
       var name = byId('ws-event-name').value.trim();
-      if (!name) return;
+      if (!name) {
+        wsLog('sys', 'no event name', 'Type the event name to send — e.g. chat.send');
+        return;
+      }
       var text = byId('ws-payload').value.trim();
       var data = null;
       if (text) {
@@ -1721,6 +2070,18 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
         wsConn.socket.send(JSON.stringify({ event: name, data: data }));
       }
       wsLog('out', name, data);
+    }
+
+    byId('ws-send').addEventListener('click', function () {
+      if (wsState === 'connected' && wsConn) {
+        wsDoSend();
+        return;
+      }
+      // Not connected yet: connect first, then send — pressing Send cold
+      // used to do nothing at all.
+      wsPendingSend = true;
+      wsLog('sys', 'auto-connect', 'Not connected — connecting first, your event will be sent when the socket opens.');
+      if (!wsConn) wsConnect();
     });
 
     byId('ws-clear').addEventListener('click', function () {
@@ -1734,6 +2095,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       byId('welcome').hidden = true;
       byId('request-view').hidden = true;
       byId('ws-view').hidden = false;
+      byId('gql-view').hidden = true;
 
       byId('overview-link').classList.remove('active');
       var active = document.querySelector('.nav-item.active');
@@ -1786,6 +2148,139 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
           '</button>');
           a.setAttribute('data-search', ('ws ' + wsEvent.event + ' ' + (wsEvent.summary || '') + ' ' + gateway.name).toLowerCase());
           a.addEventListener('click', function () { showWsView(gateway, wsEvent, a); });
+          itemsEl.appendChild(a);
+        });
+
+        nav.appendChild(group);
+      });
+    }
+
+    /* ------------------------------------------------------------------ *
+     * GraphQL — resolver docs + console
+     * ------------------------------------------------------------------ */
+
+    var gqlDoc = null;
+
+    byId('gql-crumb-overview').addEventListener('click', showOverview);
+
+    function showGqlView(resolver, operation, navEl) {
+      current = null;
+      byId('welcome').hidden = true;
+      byId('request-view').hidden = true;
+      byId('ws-view').hidden = true;
+      byId('gql-view').hidden = false;
+
+      byId('overview-link').classList.remove('active');
+      var active = document.querySelector('.nav-item.active');
+      if (active) active.classList.remove('active');
+      if (navEl) navEl.classList.add('active');
+
+      byId('gql-crumb-resolver').textContent = resolver.name;
+      byId('gql-crumb-op').textContent = operation.name;
+      byId('gql-kind').textContent = operation.kind.toUpperCase();
+      var env = activeEnv();
+      var base = env && env.baseUrl ? env.baseUrl.replace(/\\/+$/, '') : location.origin;
+      byId('gql-url').value = base + '/graphql';
+      byId('gql-summary').textContent = operation.summary || '';
+      byId('gql-query').value = operation.sample || '';
+      // Pre-fill variables with realistic values derived from the argument
+      // schemas — the operation is runnable without typing anything.
+      var varsExample = {};
+      (operation.args || []).forEach(function (arg) {
+        varsExample[arg.name] = exampleOf(arg.schema || {}, 0, arg.name);
+      });
+      byId('gql-variables').value = Object.keys(varsExample).length
+        ? JSON.stringify(varsExample, null, 2) : '';
+      byId('gql-resp').innerHTML = '<div class="resp-empty">Hit <b>Run</b> to execute the operation against your GraphQL endpoint.</div>';
+      byId('gql-meta').textContent = '';
+
+      var doc = '';
+      if (operation.deprecated) doc += '<p><span class="chip chip-err">deprecated</span></p>';
+      if (operation.description) doc += '<p class="dim">' + esc(operation.description) + '</p>';
+      var argRows = (operation.args || []).map(function (arg) {
+        var tree = arg.schema && Object.keys(arg.schema).length ? schemaTree(arg.schema, 0) : '';
+        return '<h4>Argument: <code>' + esc(arg.name) + '</code>' + (arg.required ? ' <span class="req-star">*</span>' : '') + '</h4>' +
+          (tree ? '<div class="schema">' + tree + '</div>' : '');
+      }).join('');
+      doc += argRows;
+      var responseTree = operation.response && Object.keys(operation.response).length
+        ? schemaTree(operation.response, 0) : '';
+      if (responseTree) doc += '<h4>Response schema</h4><div class="schema">' + responseTree + '</div>';
+      byId('gql-doc').innerHTML = doc;
+    }
+
+    byId('gql-run').addEventListener('click', function () {
+      var query = byId('gql-query').value;
+      var variables = null;
+      var varsText = byId('gql-variables').value.trim();
+      if (varsText) {
+        try {
+          variables = JSON.parse(varsText);
+        } catch (e) {
+          byId('gql-resp').innerHTML = '<div class="resp-empty">Variables is not valid JSON — ' + esc(String(e.message)) + '</div>';
+          return;
+        }
+      }
+
+      var started = Date.now();
+      var runBtn = byId('gql-run');
+      runBtn.disabled = true;
+      runBtn.textContent = '…';
+      // Immediate, visible feedback: the response panel lives below the
+      // schema docs, so bring it into view instead of updating off-screen.
+      byId('gql-resp').innerHTML = '<div class="resp-empty">Running…</div>';
+      byId('gql-resp').scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      fetch(byId('gql-url').value, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(variables ? { query: query, variables: variables } : { query: query }),
+      }).then(function (res) {
+        return res.text().then(function (text) { return { res: res, text: text }; });
+      }).then(function (r) {
+        var ms = Date.now() - started;
+        var cls = r.res.ok ? 'status-2xx' : 'status-5xx';
+        byId('gql-meta').innerHTML = '<span class="status ' + cls + '">' + r.res.status + '</span> · ' + ms + ' ms';
+        var pretty = r.text;
+        try { pretty = JSON.stringify(JSON.parse(r.text), null, 2); } catch (e) { /* keep raw */ }
+        byId('gql-resp').innerHTML = '<pre class="code">' + hljson(pretty) + '</pre>';
+        byId('gql-resp').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }).catch(function (err) {
+        byId('gql-resp').innerHTML = '<div class="resp-empty">Request failed — ' + esc(String(err)) + '. Is a GraphQL endpoint mounted at this URL?</div>';
+      }).then(function () {
+        runBtn.disabled = false;
+        runBtn.textContent = 'Run';
+      });
+    });
+
+    function renderGqlSidebar() {
+      var nav = byId('side-collections');
+      gqlDoc.resolvers.forEach(function (resolver) {
+        var group = el('<div class="group">' +
+          '<button type="button" class="group-head">' +
+            '<span class="chev">▸</span>' +
+            '<span class="group-name">◈ ' + esc(resolver.name) + '</span>' +
+            '<span class="group-count">' + resolver.operations.length + '</span>' +
+          '</button>' +
+          '<div class="group-items"></div>' +
+        '</div>');
+
+        group.querySelector('.group-head').addEventListener('click', function () {
+          group.classList.toggle('open');
+        });
+
+        var itemsEl = group.querySelector('.group-items');
+        resolver.operations.forEach(function (operation) {
+          var badge = operation.kind === 'mutation' ? 'MUT' : operation.kind === 'subscription' ? 'SUB' : 'QRY';
+          var a = el('<button type="button" class="nav-item">' +
+            '<span class="method method-sm method-gql">' + badge + '</span>' +
+            '<span class="nav-text">' +
+              '<span class="nav-name">' + esc(operation.summary || operation.name) + '</span>' +
+              '<span class="nav-path">' + esc(operation.name) + '</span>' +
+            '</span>' +
+          '</button>');
+          a.setAttribute('data-search', ('graphql ' + operation.kind + ' ' + operation.name + ' ' + (operation.summary || '') + ' ' + resolver.name).toLowerCase());
+          a.addEventListener('click', function () { showGqlView(resolver, operation, a); });
           itemsEl.appendChild(a);
         });
 
@@ -1858,6 +2353,16 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
           renderWsSidebar();
         }
       }).catch(function () { /* endpoint not available */ });
+
+      // Same for GraphQL resolver docs.
+      fetch(SPEC_URL.replace('-json', '-graphql-json')).then(function (res) {
+        return res.ok ? res.json() : null;
+      }).then(function (doc) {
+        if (doc && doc.resolvers && doc.resolvers.length) {
+          gqlDoc = doc;
+          renderGqlSidebar();
+        }
+      }).catch(function () { /* endpoint not available */ });
     }).catch(function (err) {
       byId('welcome-desc').textContent = 'Failed to load ' + SPEC_URL + ' — ' + String(err);
     });
@@ -1876,14 +2381,37 @@ function buildCss(accent: string): string {
       --mono: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
     }
     [data-theme='light'] {
-      --bg: #ffffff; --bg-2: #f6f8fa; --bg-3: #eaeef3;
-      --fg: #1a2130; --fg-2: rgba(26, 33, 48, 0.72); --fg-3: rgba(26, 33, 48, 0.48);
-      --border: rgba(26, 33, 48, 0.12); --shadow: rgba(20, 24, 36, 0.06);
+      --bg: #ffffff; --bg-2: #f6f8fa; --bg-3: #e9edf3;
+      --fg: #1a2130; --fg-2: rgba(26, 33, 48, 0.75); --fg-3: rgba(26, 33, 48, 0.56);
+      --border: rgba(26, 33, 48, 0.14); --shadow: rgba(20, 24, 36, 0.06);
+      --glass: rgba(255, 255, 255, 0.82);
     }
+    /* A bright accent (the cyan default) is unreadable on white. Light mode
+       darkens it; dark mode keeps the vivid original. */
+    @supports (color: color-mix(in srgb, red, blue)) {
+      [data-theme='light'] { --accent: color-mix(in srgb, ${accent} 55%, #073a4a); }
+    }
+    [data-theme='light'] .j-str { color: #1a7f37; }
+    [data-theme='light'] .j-num { color: #9a6700; }
+    [data-theme='light'] .j-bool { color: #8250df; }
+    [data-theme='light'] .chip-ok, [data-theme='light'] .status-ok { background: #1a7f3715; color: #1a7f37; }
+    [data-theme='light'] .chip-err, [data-theme='light'] .status-err { background: #d1242f12; color: #d1242f; }
+    [data-theme='light'] .method-sm.method-get { color: #0550ae; }
+    [data-theme='light'] .method-sm.method-post { color: #1a7f37; }
+    [data-theme='light'] .method-sm.method-put { color: #9a6700; }
+    [data-theme='light'] .method-sm.method-patch { color: #6639ba; }
+    [data-theme='light'] .method-sm.method-delete { color: #d1242f; }
+    [data-theme='light'] .method-sm.method-options, [data-theme='light'] .method-sm.method-head { color: #57606a; }
+    [data-theme='light'] .method-sm.method-gql { color: #bf2e8f; }
+    [data-theme='light'] .method-sm.method-ws { color: #7c5cd6; }
     [data-theme='dark'] {
       --bg: #14181f; --bg-2: #1b212b; --bg-3: #242c38;
       --fg: rgba(240, 245, 252, 0.94); --fg-2: rgba(214, 224, 238, 0.72); --fg-3: rgba(190, 203, 222, 0.45);
       --border: rgba(214, 226, 242, 0.1); --shadow: rgba(0, 0, 0, 0.28);
+      --glass: rgba(20, 24, 31, 0.82);
+    }
+    @supports (color: color-mix(in srgb, red, blue)) {
+      :root { --ring: color-mix(in srgb, var(--accent) 22%, transparent); --accent-tint: color-mix(in srgb, var(--accent) 10%, transparent); }
     }
     * { box-sizing: border-box; }
     [hidden] { display: none !important; }
@@ -1898,7 +2426,7 @@ function buildCss(accent: string): string {
 
     /* ---- Polish: selection, scrollbars, motion, focus ---- */
     ::selection { background: ${accent}55; }
-    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 8px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--fg-3); }
@@ -1930,25 +2458,33 @@ function buildCss(accent: string): string {
     .topbar {
       position: sticky; top: 0; z-index: 10; height: 52px;
       display: flex; align-items: center; justify-content: space-between; gap: 16px;
-      padding: 0 16px; background: var(--bg); border-bottom: 1px solid var(--border);
+      padding: 0 16px; background: var(--glass); border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(10px) saturate(1.5); -webkit-backdrop-filter: blur(10px) saturate(1.5);
     }
     .brand { display: flex; align-items: center; gap: 10px; min-width: 0; cursor: pointer; }
-    .brand-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); flex: none; }
+    .brand-dot {
+      width: 10px; height: 10px; border-radius: 50%; background: var(--accent); flex: none;
+      box-shadow: 0 0 8px var(--accent);
+    }
     .brand-title { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .topbar-actions { display: flex; align-items: center; gap: 8px; }
     .search {
       width: 210px; padding: 7px 12px; border-radius: 8px;
       border: 1px solid var(--border); background: var(--bg-2); color: var(--fg);
-      font-size: 13px; outline: none;
+      font-size: 13px; outline: none; transition: width 0.2s, border-color 0.15s, box-shadow 0.15s;
     }
-    .search:focus { border-color: var(--accent); }
+    .search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); width: 250px; }
     .btn-ghost {
+      display: inline-flex; align-items: center; gap: 6px;
       padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border);
       background: transparent; color: var(--fg-2); font-size: 13px;
       cursor: pointer; text-decoration: none; white-space: nowrap;
-      font-family: var(--font);
+      font-family: var(--font); transition: color 0.15s, border-color 0.15s, background 0.15s;
     }
-    .btn-ghost:hover { color: var(--fg); border-color: var(--accent); }
+    .btn-ghost svg { flex: none; }
+    .btn-ghost:hover { color: var(--fg); border-color: var(--accent); background: var(--accent-tint); }
+    [data-theme='dark'] .icon-sun { display: none; }
+    [data-theme='light'] .icon-moon { display: none; }
     .btn-ghost.auth-on { color: var(--accent); border-color: var(--accent); }
 
     /* ---- Auth popover ---- */
@@ -1969,6 +2505,7 @@ function buildCss(accent: string): string {
 
     /* ---- WebSocket console ---- */
     .method-ws { background: #a371f7; }
+    .method-sm.method-ws { color: #a371f7; }
     .ws-compose { display: flex; gap: 8px; margin: 14px 0 8px; }
     .ws-event-input {
       flex: none; width: 260px; padding: 8px 12px; border-radius: 8px;
@@ -1985,6 +2522,19 @@ function buildCss(accent: string): string {
     .ws-log-name { font-family: var(--mono); font-size: 12.5px; font-weight: 700; }
     .ws-log-time { float: right; font-size: 11px; }
     .ws-log-data { margin: 6px 0 0; font-size: 12px; }
+
+    /* ---- GraphQL console ---- */
+    .method-gql { background: #e535ab; }
+    .method-sm.method-gql { color: #e535ab; }
+    #gql-kind { width: auto; min-width: 62px; padding: 5px 12px; }
+    .gql-label { margin: 14px 0 6px; font-size: 12.5px; color: var(--fg-2); }
+    .gql-label .dim { font-weight: 400; font-size: 11px; }
+    .gql-editor { font-size: 13px; }
+    /* Standalone editors (WS payload, GraphQL query/variables) have no
+       syntax-highlight overlay behind them, so the text must be opaque. */
+    .body-editor.plain-editor { color: var(--fg); background: var(--bg-2); }
+    .body-editor.plain-editor::selection { background: ${accent}44; color: var(--fg); }
+    .req-star { color: var(--red, #f85149); }
 
     /* ---- Environments ---- */
     .env-select {
@@ -2028,8 +2578,8 @@ function buildCss(accent: string): string {
       cursor: pointer; text-align: left;
     }
     .overview-link:hover { background: var(--bg-3); color: var(--fg); }
-    .overview-link.active { background: var(--bg-3); color: var(--fg); box-shadow: inset 2px 0 0 var(--accent); }
-    .ov-icon { font-size: 14px; }
+    .overview-link.active { background: var(--accent-tint, var(--bg-3)); color: var(--fg); box-shadow: inset 2px 0 0 var(--accent); }
+    .ov-icon { flex: none; }
     .side-tabs { display: flex; gap: 2px; padding: 8px 8px 0; border-bottom: 1px solid var(--border); }
     .side-tab {
       flex: 1; padding: 8px 6px; border: none; background: none; cursor: pointer;
@@ -2062,7 +2612,8 @@ function buildCss(accent: string): string {
       color: var(--fg-2); font-family: var(--font); cursor: pointer; text-align: left;
     }
     .nav-item:hover { background: var(--bg-3); color: var(--fg); }
-    .nav-item.active { background: var(--bg-3); color: var(--fg); box-shadow: inset 2px 0 0 var(--accent); }
+    .nav-item.active { background: var(--accent-tint, var(--bg-3)); color: var(--fg); box-shadow: inset 2px 0 0 var(--accent); }
+    .nav-item, .group-head, .overview-link { transition: background 0.12s, color 0.12s; }
     .nav-text { min-width: 0; display: flex; flex-direction: column; }
     .nav-name { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .nav-path { font-family: var(--mono); font-size: 10.5px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2095,7 +2646,13 @@ function buildCss(accent: string): string {
       background: var(--bg-3); color: var(--fg-2); font-size: 12px; font-weight: 600;
       margin-bottom: 14px; letter-spacing: 0.3px;
     }
-    .welcome-inner h1 { font-size: 28px; margin: 0 0 10px; }
+    .welcome-inner h1 { font-size: 28px; margin: 0 0 10px; letter-spacing: -0.4px; }
+    @supports (-webkit-background-clip: text) and (color: color-mix(in srgb, red, blue)) {
+      .welcome-inner h1 {
+        background: linear-gradient(100deg, var(--fg) 30%, color-mix(in srgb, var(--fg) 45%, var(--accent)));
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+    }
     .ov-cards {
       display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
       margin: 26px 0 14px;
@@ -2105,7 +2662,7 @@ function buildCss(accent: string): string {
       background: var(--bg-2); display: flex; flex-direction: column; gap: 2px;
       transition: transform 0.12s, border-color 0.12s;
     }
-    .ov-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+    .ov-card:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 8px 22px var(--shadow); }
     .ov-card b { font-size: 26px; color: var(--accent); font-family: var(--mono); }
     .ov-card span { font-size: 11.5px; color: var(--fg-3); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; }
     .ov-card-wide { grid-column: 1 / -1; }
@@ -2142,7 +2699,9 @@ function buildCss(accent: string): string {
       display: flex; align-items: stretch; gap: 0; margin-bottom: 6px;
       border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
       background: var(--bg-2); box-shadow: 0 1px 3px var(--shadow);
+      transition: border-color 0.15s, box-shadow 0.15s;
     }
+    .req-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
     .req-bar .method { border-radius: 0; width: 84px; display: flex; align-items: center; justify-content: center; font-size: 12px; }
     .url-input {
       flex: 1; border: none; outline: none; padding: 12px 14px;
@@ -2151,9 +2710,13 @@ function buildCss(accent: string): string {
     .btn-send {
       border: none; padding: 0 28px; background: var(--accent); color: #fff;
       font-weight: 800; font-size: 13.5px; letter-spacing: 0.3px; cursor: pointer;
-      font-family: var(--font);
+      font-family: var(--font); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
     }
-    .btn-send:hover { filter: brightness(1.12); }
+    @supports (color: color-mix(in srgb, red, blue)) {
+      .btn-send { background: linear-gradient(155deg, var(--accent), color-mix(in srgb, var(--accent) 72%, #000)); }
+      .btn-send:hover { box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 45%, transparent); }
+    }
+    .btn-send:hover { filter: brightness(1.1); }
     .req-summary { display: flex; align-items: center; gap: 8px; margin: 2px 2px 12px; font-size: 12.5px; }
     .req-hint { margin-left: auto; font-size: 11px; }
 
@@ -2164,8 +2727,9 @@ function buildCss(accent: string): string {
       color: var(--fg-2); font-family: var(--font); font-size: 13px; font-weight: 600;
       border-bottom: 2px solid transparent; margin-bottom: -1px;
       display: flex; align-items: center; gap: 5px;
+      border-radius: 8px 8px 0 0; transition: color 0.15s, background 0.15s, border-color 0.15s;
     }
-    .tab:hover { color: var(--fg); }
+    .tab:hover { color: var(--fg); background: var(--accent-tint, var(--bg-2)); }
     .tab.active { color: var(--fg); border-bottom-color: var(--accent); }
     .tab-count {
       font-size: 10px; background: var(--bg-3); color: var(--fg-2);
@@ -2217,14 +2781,40 @@ function buildCss(accent: string): string {
     /* ---- Body editor ---- */
     .body-bar { margin-bottom: 8px; display: flex; align-items: center; gap: 14px; }
     .body-bar .btn-add { margin-top: 0; margin-left: auto; }
+    .form-table { margin-top: 6px; }
+    .file-cell { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
+    .file-btn { margin-top: 0; flex: none; }
+    .file-names { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-src {
+      padding: 4px 8px; border-radius: 7px; border: 1px solid var(--border);
+      background: var(--bg-2); color: var(--fg-2); font-family: var(--font); font-size: 11.5px;
+      font-weight: 600; outline: none; cursor: pointer; flex: none;
+    }
+    .file-src:focus { border-color: var(--accent); }
+    .file-url { flex: 1; min-width: 160px; }
+    .file-b64 { flex: 1; min-width: 160px; resize: vertical; font-family: var(--mono); font-size: 11.5px; }
+    .chip-filetag { background: ${accent}1a; color: var(--accent); font-size: 10px; padding: 1px 7px; vertical-align: 1px; }
     .body-mode { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--fg-2); cursor: pointer; }
     .body-mode input { accent-color: var(--accent); cursor: pointer; }
+    .editor-wrap { position: relative; }
     .body-editor {
+      position: relative; z-index: 1; display: block;
       width: 100%; padding: 12px 14px; border-radius: 10px;
-      border: 1px solid var(--border); background: var(--bg-2); color: var(--fg);
+      border: 1px solid var(--border); background: transparent;
+      color: transparent; caret-color: var(--accent);
       font-family: var(--mono); font-size: 12.5px; line-height: 1.6; outline: none; resize: vertical;
+      white-space: pre-wrap; overflow-wrap: break-word;
     }
-    .body-editor:focus { border-color: var(--accent); }
+    .body-editor::selection { background: ${accent}44; color: transparent; }
+    .body-editor:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
+    .body-highlight {
+      position: absolute; inset: 0; z-index: 0; margin: 0; padding: 12px 14px;
+      border: 1px solid transparent; border-radius: 10px;
+      background: var(--bg-2); color: var(--fg);
+      font-family: var(--mono); font-size: 12.5px; line-height: 1.6;
+      white-space: pre-wrap; overflow-wrap: break-word;
+      overflow: hidden; pointer-events: none;
+    }
 
     /* ---- Code snippets tab ---- */
     .code-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
@@ -2257,7 +2847,9 @@ function buildCss(accent: string): string {
     .status {
       font-family: var(--mono); font-weight: 700; font-size: 12px;
       padding: 2px 9px; border-radius: 6px;
+      display: inline-flex; align-items: center; gap: 6px;
     }
+    .status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
     .status-ok { background: #3fb95022; color: #3fb950; }
     .status-err { background: #f8514922; color: #f85149; }
     .status-other { background: var(--bg-3); color: var(--fg-2); }
@@ -2289,8 +2881,33 @@ function buildCss(accent: string): string {
       .kv-row { grid-template-columns: 30px 130px 1fr; }
       .kv-desc { display: none; }
       .search { width: 120px; }
+      .search:focus { width: 150px; }
       .ov-cards { grid-template-columns: 1fr 1fr; }
       .auth-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 640px) {
+      .topbar { height: auto; flex-wrap: wrap; padding: 8px 12px; gap: 8px; }
+      .layout { flex-direction: column; height: auto; }
+      .sidebar {
+        width: 100%; max-height: 40vh; border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+      .workspace { padding: 12px 12px 40px; overflow-y: visible; }
+      .req-bar { flex-wrap: wrap; }
+      .url-input { min-width: 150px; }
+      .btn-send { padding: 10px 20px; }
+      .ov-cards { grid-template-columns: 1fr; }
+      .kv-row { grid-template-columns: 30px 100px 1fr; }
+      .auth-pop, .env-pop { right: 8px; left: 8px; width: auto; }
+      .tabs { overflow-x: auto; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
     }
   `;
 }

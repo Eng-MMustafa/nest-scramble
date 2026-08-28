@@ -111,6 +111,20 @@ describe('ScannerService', () => {
       expect(returnType.isArray).toBe(false);
     });
 
+    it('extracts properties from inferred anonymous return types', () => {
+      // `getStats()` has no annotation — the envelope shape is inferred from
+      // the return statement. It used to be documented as a plain string.
+      const returnType = findMethod('getStats').returnType;
+      expect(returnType.properties).toBeDefined();
+
+      const names = returnType.properties!.map((p) => p.name).sort();
+      expect(names).toEqual(['active', 'items', 'total']);
+
+      const items = returnType.properties!.find((p) => p.name === 'items')!;
+      expect(items.type.isArray).toBe(true);
+      expect(items.type.type).toBe('UserDto');
+    });
+
     it('resolves the nested DTO properties', () => {
       const properties = findMethod('getUser').returnType.properties;
       expect(properties).toBeDefined();

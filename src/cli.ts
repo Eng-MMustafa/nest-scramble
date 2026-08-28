@@ -11,6 +11,7 @@ import { diffSpecs } from './diff/SpecDiff';
 import { diagnose, formatDoctorReport } from './doctor/DocsDoctor';
 import { formatApiChangelog } from './diff/ApiChangelog';
 import { formatScenarioResult, runScenario, Scenario } from './runner/ScenarioRunner';
+import { generateScenarios, scenarioFileName } from './runner/ScenarioGenerator';
 import { DiffFormat, formatDiff } from './diff/DiffFormatter';
 import { ScrambleLogger } from './utils/ScrambleLogger';
 import { CliUsageError, CommandDef, formatHelp, parseCommand } from './utils/CliParser';
@@ -83,6 +84,8 @@ const testCommand: CommandDef = {
     { key: 'baseUrl', long: '--baseUrl', short: '-b', placeholder: '<url>', default: '', description: 'Base URL of the running API (overrides the scenario file)' },
     { key: 'spec', long: '--spec', placeholder: '<path>', default: '', description: 'OpenAPI spec file or source directory for matchesSpec assertions' },
     { key: 'globalPrefix', long: '--globalPrefix', short: '-p', placeholder: '<prefix>', default: '', description: 'Value passed to app.setGlobalPrefix(), applied when generating the spec from source' },
+    { key: 'generate', long: '--generate', boolean: true, description: 'Generate scenario files from the API instead of running: the positional becomes the spec file or source directory' },
+    { key: 'output', long: '--output', short: '-o', placeholder: '<dir>', default: 'scenarios', description: 'Directory for generated scenario files (with --generate)' },
   ],
 };
 
@@ -405,12 +408,41 @@ function collectScenarioFiles(target: string): string[] {
     .sort();
 }
 
+/** `test --generate`: writes one scenario file per tag, derived from the spec. */
+function runGenerateScenarios(
+  specPath: string,
+  options: { baseUrl: string; globalPrefix: string; output: string },
+): void {
+  const spec = loadSpec(specPath, options.globalPrefix);
+  const scenarios = generateScenarios(spec, { baseUrl: options.baseUrl || undefined });
+
+  if (scenarios.length === 0) {
+    console.error('No operations found to generate scenarios from.');
+    process.exit(1);
+  }
+
+  fs.mkdirSync(options.output, { recursive: true });
+  for (const scenario of scenarios) {
+    const file = path.join(options.output, scenarioFileName(scenario));
+    fs.writeFileSync(file, JSON.stringify(scenario, null, 2) + '\n');
+    console.log(`✓ ${file}  (${scenario.steps.length} step(s))`);
+  }
+
+  console.log(`\n${scenarios.length} scenario(s) generated. Review the expectations, then run:`);
+  console.log(`  npx nest-scramble test ${options.output} --spec ${specPath}`);
+}
+
 async function runTest(
   scenarioPath: string,
-  options: { baseUrl: string; spec: string; globalPrefix: string },
+  options: { baseUrl: string; spec: string; globalPrefix: string; generate: boolean; output: string },
 ): Promise<void> {
   try {
     ScrambleLogger.configure('error');
+
+    if (options.generate) {
+      runGenerateScenarios(scenarioPath, options);
+      return;
+    }
 
     const files = collectScenarioFiles(scenarioPath);
     if (files.length === 0) {

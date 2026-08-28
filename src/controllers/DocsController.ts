@@ -41,10 +41,14 @@ export function createDocsController(config: { path?: string } = {}): Type<any> 
       @Inject('NEST_SCRAMBLE_OPENAPI') private openApiSpec: any,
       @Inject('NEST_SCRAMBLE_OPTIONS') private options: any,
       @Optional() @Inject('NEST_SCRAMBLE_WS') private wsDocument: any,
+      @Optional() @Inject('NEST_SCRAMBLE_GRAPHQL') private graphqlDocument: any,
     ) {}
 
     @Get(docsPath)
     @Header('Content-Type', 'text/html; charset=utf-8')
+    // Browsers heuristically cache pages without cache headers; after a
+    // library upgrade that served users a stale console UI.
+    @Header('Cache-Control', 'no-store')
     getDocs(): string {
       return renderDocsPage({
         specUrl: `/${docsPath}-json`,
@@ -84,6 +88,17 @@ export function createDocsController(config: { path?: string } = {}): Type<any> 
     @Header('Access-Control-Allow-Origin', '*')
     getWsJson(): string {
       return JSON.stringify(this.wsDocument || { gateways: [] }, null, 2);
+    }
+
+    /**
+     * GraphQL resolver documentation. `resolvers` is empty when the project
+     * has none, so the docs UI knows to hide the section.
+     */
+    @Get(`${docsPath}-graphql-json`)
+    @Header('Content-Type', 'application/json; charset=utf-8')
+    @Header('Access-Control-Allow-Origin', '*')
+    getGraphQLJson(): string {
+      return JSON.stringify(this.graphqlDocument || { resolvers: [] }, null, 2);
     }
 
     /**

@@ -92,6 +92,14 @@ export class DtoAnalyzer {
         }
       }
 
+      // `boolean` is a union of `true | false` at the checker level, and
+      // properties widened from object literals surface it that way. Without
+      // this check they fell into the union branch and were documented as a
+      // two-variant `oneOf` instead of a plain boolean.
+      if (typeText === 'boolean') {
+        return { type: 'boolean', isArray: false, isOptional };
+      }
+
       // Check if it's a union type
       const unionTypes = type.isUnion() ? type.types : [];
       if (unionTypes.length > 1) {
@@ -166,6 +174,26 @@ export class DtoAnalyzer {
               properties,
             };
           }
+        }
+      }
+
+      // Anonymous object types — inferred returns (`return { total, items }`),
+      // type literals and mapped shapes. No named declaration exists, but the
+      // checker still knows every property. Without this branch these shapes
+      // fell through to the name-based fallback and were documented as strings.
+      if (
+        type.flags & ts.TypeFlags.Object &&
+        type.getCallSignatures().length === 0 &&
+        !this.checker.isArrayLikeType(type)
+      ) {
+        const properties = this.extractPropertiesOfType(type);
+        if (properties.length > 0) {
+          return {
+            type: typeText,
+            isArray: false,
+            isOptional,
+            properties,
+          };
         }
       }
 

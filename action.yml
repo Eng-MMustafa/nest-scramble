@@ -1,0 +1,96 @@
+name: 'Nest-Scramble API Check'
+description: >-
+  API contract gate for NestJS pull requests: documentation health score,
+  breaking-change detection against a base branch, and optional scenario
+  tests — no app bootstrap, no database.
+author: 'Mohamed Mustafa'
+branding:
+  icon: 'shield'
+  color: 'purple'
+
+inputs:
+  source:
+    description: 'Path to the directory containing your @Controller() classes'
+    required: false
+    default: 'src'
+  base-ref:
+    description: >-
+      Branch to diff the API contract against (e.g. main). Leave empty to
+      skip breaking-change detection. Requires actions/checkout with
+      fetch-depth: 0.
+    required: false
+    default: ''
+  fail-on-breaking:
+    description: 'Fail the job when the diff finds a breaking change'
+    required: false
+    default: 'true'
+  min-score:
+    description: 'Minimum docs health score (0-100). 0 reports without failing.'
+    required: false
+    default: '0'
+  global-prefix:
+    description: 'Value your app passes to app.setGlobalPrefix()'
+    required: false
+    default: ''
+  scenarios:
+    description: >-
+      Path to a *.scenario.json file or directory to run against a live
+      server. Leave empty to skip. The server must already be reachable.
+    required: false
+    default: ''
+  base-url:
+    description: 'Base URL for scenario tests (overrides the scenario files)'
+    required: false
+    default: ''
+  version:
+    description: 'nest-scramble version to run'
+    required: false
+    default: 'latest'
+
+runs:
+  using: 'composite'
+  steps:
+    # The scanner needs the project's own TypeScript (a peer dependency), so
+    # this action must run after the usual `npm ci` step.
+    - name: Documentation health
+      shell: bash
+      run: |
+        PREFIX_FLAG=""
+        if [ -n "${{ inputs.global-prefix }}" ]; then
+          PREFIX_FLAG="--globalPrefix ${{ inputs.global-prefix }}"
+        fi
+        npx --yes nest-scramble@${{ inputs.version }} doctor "${{ inputs.source }}" \
+          --min-score "${{ inputs.min-score }}" $PREFIX_FLAG
+
+    - name: Breaking-change detection
+      if: inputs.base-ref != ''
+      shell: bash
+      run: |
+        git fetch origin "${{ inputs.base-ref }}" --depth=1
+        git worktree add --detach /tmp/nest-scramble-base "origin/${{ inputs.base-ref }}"
+
+        FLAGS=""
+        if [ "${{ inputs.fail-on-breaking }}" = "true" ]; then
+          FLAGS="--fail-on-breaking"
+        fi
+        if [ -n "${{ inputs.global-prefix }}" ]; then
+          FLAGS="$FLAGS --globalPrefix ${{ inputs.global-prefix }}"
+        fi
+
+        npx --yes nest-scramble@${{ inputs.version }} diff \
+          "/tmp/nest-scramble-base/${{ inputs.source }}" "${{ inputs.source }}" $FLAGS
+
+        git worktree remove --force /tmp/nest-scramble-base
+
+    - name: Scenario tests
+      if: inputs.scenarios != ''
+      shell: bash
+      run: |
+        FLAGS="--spec ${{ inputs.source }}"
+        if [ -n "${{ inputs.base-url }}" ]; then
+          FLAGS="$FLAGS --baseUrl ${{ inputs.base-url }}"
+        fi
+        if [ -n "${{ inputs.global-prefix }}" ]; then
+          FLAGS="$FLAGS --globalPrefix ${{ inputs.global-prefix }}"
+        fi
+        npx --yes nest-scramble@${{ inputs.version }} test "${{ inputs.scenarios }}" $FLAGS

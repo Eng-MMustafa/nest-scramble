@@ -12,6 +12,8 @@ export * from './diff/SpecDiff';
 export * from './doctor/DocsDoctor';
 export * from './drift/DriftDetector';
 export * from './drift/DriftMiddleware';
+export * from './graphql/ResolverScanner';
+export * from './runner/ScenarioGenerator';
 export * from './runner/ScenarioRunner';
 export { IncrementalScannerService, ScanOptions } from './scanner/IncrementalScannerService';
 export * from './scanner/ScannerService';

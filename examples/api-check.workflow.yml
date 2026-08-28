@@ -1,0 +1,52 @@
+# Copy to .github/workflows/api-check.yml in your NestJS project.
+#
+# On every pull request this workflow:
+#   1. scores your API documentation health (and fails below the threshold),
+#   2. diffs the API contract against the base branch and fails on breaking
+#      changes,
+#   3. (optional) boots your app and runs generated scenario tests against it.
+#
+# No database, no environment secrets — the scanner reads the TypeScript AST.
+
+name: API Check
+
+on:
+  pull_request:
+
+jobs:
+  api-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The diff needs the base branch to compare against.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # nest-scramble uses your project's TypeScript (peer dependency).
+      - run: npm ci
+
+      - name: API contract gate
+        uses: Eng-MMustafa/nest-scramble@v5
+        with:
+          source: src
+          base-ref: ${{ github.base_ref }}
+          fail-on-breaking: 'true'
+          min-score: '70'
+
+      # --- Optional: run scenario tests against the live app -------------
+      # - name: Start the API
+      #   run: |
+      #     npm run start &
+      #     npx wait-on http://localhost:3000/docs-json
+      #
+      # - name: Scenario tests
+      #   uses: Eng-MMustafa/nest-scramble@v5
+      #   with:
+      #     source: src
+      #     scenarios: scenarios
+      #     base-url: http://localhost:3000

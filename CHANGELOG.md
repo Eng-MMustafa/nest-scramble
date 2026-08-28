@@ -6,9 +6,45 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
-## [Unreleased]
+## [5.3.0] - 2026-08-28
+
+### Added
+- **GraphQL support.** `@Resolver()`, `@Query()`, `@Mutation()` and
+  `@Subscription()` are scanned statically like controllers: argument and
+  return types become JSON schemas, an SDL sketch is generated per operation,
+  and the document is served at `/docs-graphql-json`. The docs UI grows a
+  GraphQL console — operations grouped by resolver in the sidebar, a query
+  editor pre-filled from the schema, a variables editor, and the response
+  panel side by side. The section only appears when the project has resolvers.
+- **Scenario generation — `nest-scramble test <src|spec> --generate`.** Writes
+  one ready-to-run `*.scenario.json` per tag, derived from the contract: log
+  in first when a login endpoint with a token-shaped response exists and
+  thread the captured token through every request as a Bearer header; order
+  create → list → read → update → delete; capture the created `id` and use it
+  for the `/:id` routes; generate deterministic request bodies from the
+  documented schemas; assert the documented status and `matchesSpec` where a
+  response schema exists. Verified end to end: the scenarios generated from
+  the demo API pass 3/3 against the live server.
+- **GitHub Action.** The repository doubles as a composite action
+  (`Eng-MMustafa/nest-scramble@v5`): documentation health gate (`min-score`),
+  breaking-change detection against the PR's base branch via a git worktree
+  (`base-ref`, `fail-on-breaking`), and optional scenario tests against a
+  booted server (`scenarios`, `base-url`). Example workflow in
+  `examples/api-check.workflow.yml`.
 
 ### Fixed
+- **Inferred return types are documented instead of falling back to `string`.**
+  Controllers that `return { total, items }` without an annotation — the most
+  common way to write an envelope — were documented as
+  `{ "type": "string", "example": "sample string" }`. The analyzer now reads
+  anonymous object shapes (inferred returns, type literals, mapped shapes)
+  from the type checker, so the OpenAPI schema, the typed client, drift
+  detection and generated scenarios all see the real shape.
+- **`boolean` properties widened from object literals are no longer a
+  two-variant `oneOf`.** The checker models `boolean` as the union
+  `true | false`; properties inferred from literal initializers surfaced it
+  that way and the schema documented `oneOf: [boolean, boolean]`, which then
+  failed `matchesSpec` contract checks against real payloads.
 - **Generic DTOs get legal, distinguishable schema names.** An instantiated
   generic such as `PaginatedDto<ProductDto>` — the standard pagination
   pattern — used the raw type text as its OpenAPI component name, and `<`/`>`

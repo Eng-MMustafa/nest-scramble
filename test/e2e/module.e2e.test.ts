@@ -79,6 +79,10 @@ describe('NestScrambleModule (e2e)', () => {
 
       const html = await res.text();
       expect(html).toContain("SPEC_URL = '/docs-json'");
+      // The WebSocket and GraphQL consoles ship with every docs page and
+      // reveal themselves only when the matching document has entries.
+      expect(html).toContain('id="ws-view"');
+      expect(html).toContain('id="gql-view"');
       // The page must be self-contained: no CDN scripts, no external fonts.
       expect(html).not.toContain('<script src');
       expect(html).not.toContain('<link href');

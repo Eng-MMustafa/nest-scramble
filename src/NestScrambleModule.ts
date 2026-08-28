@@ -10,6 +10,7 @@ import { MockGenerator } from './utils/MockGenerator';
 import { OpenApiTransformer } from './utils/OpenApiTransformer';
 import { createDocsController, normalizeDocsPath } from './controllers/DocsController';
 import { buildWsDocument, GatewayScanner } from './websocket/GatewayScanner';
+import { buildGraphQLDocument, ResolverScanner } from './graphql/ResolverScanner';
 import { AutoDetector } from './utils/AutoDetector';
 import { buildWildcardRoute } from './utils/NestCompat';
 import { LogLevel, ScrambleLogger } from './utils/ScrambleLogger';
@@ -268,6 +269,21 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
       ScrambleLogger.warn(`Gateway scan failed: ${error instanceof Error ? error.message : error}`);
     }
 
+    // GraphQL resolvers get the same treatment; empty document = hidden section.
+    let graphqlDocument: any = null;
+    try {
+      const resolvers = new ResolverScanner().scanResolvers(config.sourcePath);
+      if (resolvers.length > 0) {
+        graphqlDocument = buildGraphQLDocument(resolvers, {
+          title: config.apiTitle,
+          version: config.apiVersion,
+        });
+        ScrambleLogger.debug(`Found ${resolvers.length} GraphQL resolver(s)`);
+      }
+    } catch (error) {
+      ScrambleLogger.warn(`Resolver scan failed: ${error instanceof Error ? error.message : error}`);
+    }
+
     const transformer = new OpenApiTransformer(config.baseUrl, config.globalPrefix);
     const openApiSpec = transformer.transform(
       controllers,
@@ -313,6 +329,10 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
         {
           provide: 'NEST_SCRAMBLE_WS',
           useValue: wsDocument,
+        },
+        {
+          provide: 'NEST_SCRAMBLE_GRAPHQL',
+          useValue: graphqlDocument,
         },
         {
           provide: 'NEST_SCRAMBLE_OPTIONS',

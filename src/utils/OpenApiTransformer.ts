@@ -561,9 +561,29 @@ export class OpenApiTransformer {
         propSchema.description = prop.description;
       }
 
-      // Add smart example based on property name (only for non-ref schemas)
-      if (!propSchema.$ref && !propSchema.example) {
-        propSchema.example = this.generateSmartExample(prop.name, prop.type.type, prop.type.enumValues);
+      // Name-based examples only make sense for scalars. Arrays, nested
+      // objects and refs used to get strings like '123 Main St' here, which
+      // poisoned every consumer that trusts `example` (scenario generation,
+      // code snippets, mock payloads). For scalars the name-based example
+      // always wins over the generic 'sample string' placeholder — except for
+      // enums, whose example is already a legal member.
+      const isScalar = !propSchema.$ref && !propSchema.properties && !propSchema.oneOf
+        && propSchema.type !== 'array' && propSchema.type !== 'object';
+      if (isScalar && !propSchema.enum) {
+        let smart = this.generateSmartExample(prop.name, prop.type.type, prop.type.enumValues);
+        // Examples must satisfy the documented constraints.
+        if (typeof smart === 'number') {
+          if (typeof propSchema.minimum === 'number' && smart < propSchema.minimum) smart = propSchema.minimum;
+          if (typeof propSchema.maximum === 'number' && smart > propSchema.maximum) smart = propSchema.maximum;
+        }
+        const compatible =
+          (propSchema.type === 'string' && typeof smart === 'string') ||
+          ((propSchema.type === 'number' || propSchema.type === 'integer') && typeof smart === 'number') ||
+          (propSchema.type === 'boolean' && typeof smart === 'boolean') ||
+          propSchema.type === undefined;
+        if (compatible) {
+          propSchema.example = smart;
+        }
       }
 
       properties[prop.name] = propSchema;
@@ -573,12 +593,13 @@ export class OpenApiTransformer {
       }
     }
 
-    // Create the schema with examples at the schema level
+    // Create the schema with examples at the schema level — scalars only,
+    // for the same reason as above.
     const schemaExample: Record<string, any> = {};
     for (const prop of type.properties!) {
-      // Include all required fields in example
-      if (!prop.type.isOptional) {
-        schemaExample[prop.name] = this.generateSmartExample(prop.name, prop.type.type, prop.type.enumValues);
+      const propSchema = properties[prop.name];
+      if (!prop.type.isOptional && propSchema.example !== undefined) {
+        schemaExample[prop.name] = propSchema.example;
       }
     }
 
