@@ -23,7 +23,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
   works without CORS setup.
 - **Richer Express scanning** — parses JSDoc summaries/descriptions, detects
   bearer-auth routes through common middleware names, recognises `multer` file
-  uploads and captures common response status codes (201, 204, 400, 401, 404).
+  uploads, captures common response status codes and infers JSON request body
+  schemas from `const { ... } = req.body` destructuring.
+- **Express WebSocket + GraphQL discovery** — Socket.IO events are grouped
+  per gateway file and GraphQL `Query`/`Mutation` operations are extracted from
+  `buildSchema(...)` SDL or `.graphql` files.
 - **Auto-detecting `init`** — `npx nest-scramble init` no longer requires
   `--module`; it looks for `src/app.module.ts`, `src/app.module.js`,
   `app.module.ts` and `app.module.js` automatically.
