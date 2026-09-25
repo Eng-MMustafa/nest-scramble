@@ -2,6 +2,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { friendlyNames } from './ExpressNaming';
+import { ExpressBodyInference, InferredBody } from './ExpressBodyInference';
+import { ExpressResponseInference, ResponseContext } from './ExpressResponseInference';
+import { ExpressSymbolRegistry } from './ExpressSymbolRegistry';
+import { matchBracket } from './ExpressLexical';
 
 export interface ExpressRouteInfo {
   method: string;
@@ -15,7 +19,7 @@ export interface ExpressRouteInfo {
   security?: any[];
   hasFileUpload?: boolean;
   consumes?: string[];
-  bodySchema?: { properties: Record<string, any>; required: string[] };
+  bodySchema?: { properties: Record<string, any>; required: string[]; source?: InferredBody['source']; name?: string };
 }
 
 export interface ExpressControllerInfo {
@@ -70,7 +74,9 @@ export class ExpressScanner {
     }
 
     const files = this.collectFiles(absolutePath);
-    const parsed = files.map((file) => this.parseFile(file));
+    const registry = new ExpressSymbolRegistry();
+    const bodies = new ExpressBodyInference(registry);
+    const parsed = files.map((file) => this.parseFile(file, bodies, registry));
 
     // Resolve `app.use('/prefix', require('./router'))` mounts.
     const mounts = this.resolveMounts(parsed, absolutePath);
@@ -136,16 +142,16 @@ export class ExpressScanner {
     return out;
   }
 
-  private static parseFile(filePath: string): ParsedFile {
+  private static parseFile(filePath: string, bodies: ExpressBodyInference, registry: ExpressSymbolRegistry): ParsedFile {
     const text = fs.readFileSync(filePath, 'utf-8');
-    const routes = this.extractRoutes(text);
+    const routes = this.extractRoutes(text, filePath, bodies, registry);
     const mounts = this.extractMounts(text, filePath);
     const isRouter = /(?:module\s*\.\s*exports\s*=|export\s+default)\s*router\b/.test(text);
 
     return { filePath, isRouter, routes, mounts };
   }
 
-  private static extractRoutes(text: string): ExpressRouteInfo[] {
+  private static extractRoutes(text: string, filePath: string, bodies: ExpressBodyInference, registry: ExpressSymbolRegistry): ExpressRouteInfo[] {
     const routes: ExpressRouteInfo[] = [];
 
     // Capture route-builder declarations so we can associate chained calls.
@@ -180,7 +186,8 @@ export class ExpressScanner {
 
       const { summary, description } = this.extractPrecedingJsDoc(text, start);
       const body = this.extractHandlerBody(text, start);
-      const combined = `${middlewareArgs} ${body}`;
+      const head = this.extractRouteHead(text, start);
+      const combined = `${middlewareArgs} ${head} ${body}`;
 
       routes.push(
         this.buildRoute(
@@ -189,11 +196,27 @@ export class ExpressScanner {
           summary,
           description,
           combined,
+          bodies.infer(head, body, filePath),
+          { filePath, registry },
         ),
       );
     }
 
     return routes;
+  }
+
+  /**
+   * The route call from its opening `(` up to (not including) the handler
+   * body: middleware references, validator chains and the handler signature
+   * (`(req: Request<{}, {}, CreateUserDto>, res)`).
+   */
+  private static extractRouteHead(text: string, routeIndex: number): string {
+    const open = text.indexOf('(', routeIndex);
+    if (open === -1) return '';
+    const close = matchBracket(text, open);
+    const call = close === -1 ? text.slice(open, open + 4000) : text.slice(open, close);
+    const bodyStart = call.search(/=>\s*\{|function\s*\([^)]*\)\s*\{|\)\s*\{/);
+    return bodyStart === -1 ? call : call.slice(0, bodyStart + 2);
   }
 
   private static extractMounts(text: string, filePath: string): MountInfo[] {
@@ -289,6 +312,8 @@ export class ExpressScanner {
     summary?: string,
     description?: string,
     body?: string,
+    inferredBody?: InferredBody,
+    context?: ResponseContext,
   ): ExpressRouteInfo {
     const cleanPath = rawPath.replace(/\?:/g, ':').replace(/\?/g, '');
     const parameters: any[] = [];
@@ -302,26 +327,30 @@ export class ExpressScanner {
       return `{${name}}`;
     });
 
-    const responses: Record<string, any> = { '200': { description: 'OK' } };
-    if (body) {
-      if (/res\.status\s*\(\s*201\s*\)/.test(body)) responses['201'] = { description: 'Created' };
-      if (/res\.status\s*\(\s*204\s*\)/.test(body)) responses['204'] = { description: 'No Content' };
-      if (/res\.status\s*\(\s*400\s*\)/.test(body)) responses['400'] = { description: 'Bad Request' };
-      if (/res\.status\s*\(\s*401\s*\)/.test(body)) responses['401'] = { description: 'Unauthorized' };
-      if (/res\.status\s*\(\s*404\s*\)/.test(body)) responses['404'] = { description: 'Not Found' };
+    const responses: Record<string, any> = {};
+    for (const [code, info] of Object.entries(ExpressResponseInference.infer(body || '', method, context))) {
+      const entry: any = { description: info.description };
+      if (info.schema) {
+        entry.content = { 'application/json': { schema: info.schema, ...(info.example !== undefined ? { example: info.example } : {}) } };
+      }
+      responses[code] = entry;
     }
-
-    const hasFileUpload = body ? /upload\.(single|array|fields|any)\s*\(/.test(body) : false;
-    const bodySchema = body ? this.extractBodySchema(body) : undefined;
-    const consumes = hasFileUpload
-      ? ['multipart/form-data']
-      : body && /req\.body/.test(body)
-        ? ['application/json']
-        : undefined;
-
-    const security = body && /requireAuth|isAuthenticated|authMiddleware|ensureAuth|passport\.authenticate/.test(body)
+    // Guarded routes answer 401 even when the handler never spells it out.
+    const security = body && /requireAuth|isAuthenticated|authMiddleware|ensureAuth|authenticate\b|passport\.authenticate|verifyToken|checkAuth|jwtAuth|authGuard/i.test(body)
       ? [{ bearerAuth: [] }]
       : undefined;
+    if (security && !responses['401']) responses['401'] = { description: 'Unauthorized' };
+
+    const hasFileUpload = body ? /upload\.(single|array|fields|any)\s*\(|multer\s*\(/.test(body) : false;
+    const bodySchema = inferredBody
+      ? { properties: inferredBody.properties, required: inferredBody.required, source: inferredBody.source, name: inferredBody.name }
+      : undefined;
+    const readsBody = body ? /req\.body|\bbody\s*\(/.test(body) || !!inferredBody : false;
+    const consumes = hasFileUpload
+      ? ['multipart/form-data']
+      : readsBody && !/^(get|head|delete|options)$/.test(method)
+        ? ['application/json']
+        : undefined;
 
     return {
       method,
@@ -336,47 +365,6 @@ export class ExpressScanner {
       consumes,
       bodySchema,
     };
-  }
-
-  /**
-   * Heuristically infer the JSON body schema from the handler body.
-   *
-   * Looks for destructuring patterns like `const { name, email } = req.body` and
-   * for validation checks like `if (!name) return res.status(400)...`.
-   */
-  private static extractBodySchema(body: string): { properties: Record<string, any>; required: string[] } | undefined {
-    if (!body) return undefined;
-
-    // Matches: const { a, b } = req.body  OR  const { a, b } = req.body || {}
-    const destructuringPattern = /(?:const|let|var)\s*\{\s*([^}]+)\}\s*=\s*req\.body(?:\s*\|\|\s*\{\})?/;
-    const match = destructuringPattern.exec(body);
-    if (!match) return undefined;
-
-    const fields = match[1]
-      .split(',')
-      .map((f) => f.trim())
-      .filter((f) => f.length > 0)
-      .map((f) => {
-        // Handle aliases (name: fullName) and default values (name = 'Ali').
-        let base = f.split(':')[0].trim();
-        base = base.split('=')[0].trim();
-        return base;
-      });
-
-    const required: string[] = [];
-    const properties: Record<string, any> = {};
-
-    for (const field of fields) {
-      properties[field] = { type: 'string' };
-      // Treat field as required if there is any guard like `if (!field)` or
-      // `if (!field || !other)` anywhere in the handler body.
-      const requiredPattern = new RegExp(`!${field}\\b`, 'g');
-      if (requiredPattern.test(body)) {
-        required.push(field);
-      }
-    }
-
-    return { properties, required };
   }
 
   private static extractPrecedingJsDoc(text: string, routeIndex: number): { summary?: string; description?: string } {

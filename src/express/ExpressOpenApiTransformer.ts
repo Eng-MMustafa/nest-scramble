@@ -25,6 +25,17 @@ export class ExpressOpenApiTransformer {
     const schemas: Record<string, any> = {};
     let hasAuth = false;
 
+    // `PUT /users/{id}` that just does `Object.assign(user, req.body)` has no
+    // shape of its own — fall back to the collection's create body, all optional.
+    const createBodies = new Map<string, { properties: Record<string, any>; name?: string }>();
+    for (const controller of controllers) {
+      for (const route of controller.routes) {
+        if (route.method === 'post' && route.bodySchema && Object.keys(route.bodySchema.properties).length) {
+          createBodies.set('/' + route.path.replace(/^\/+/, ''), { properties: route.bodySchema.properties, name: route.bodySchema.name });
+        }
+      }
+    }
+
     for (const controller of controllers) {
       const tag = controller.name;
 
@@ -45,15 +56,27 @@ export class ExpressOpenApiTransformer {
           responses: route.responses || { '200': { description: 'OK' } },
         };
 
-        if (route.consumes || route.bodySchema) {
+        let bodySchema = route.bodySchema;
+        if (!bodySchema && route.consumes?.[0] === 'application/json' && /^(put|patch)$/.test(httpMethod)) {
+          const collection = openApiPath.replace(/\/\{[^}]+\}$/, '');
+          const create = createBodies.get(collection);
+          if (create) bodySchema = { properties: create.properties, required: [], source: 'typescript', name: create.name ? `Partial<${create.name}>` : undefined };
+        }
+
+        if (route.consumes || bodySchema) {
           const contentType = route.consumes?.[0] || 'application/json';
           let schema: any = {};
-          if (route.bodySchema) {
-            const inline = { type: 'object', properties: route.bodySchema.properties, required: route.bodySchema.required };
+          if (bodySchema) {
+            const inline: any = { type: 'object', properties: bodySchema.properties, required: bodySchema.required };
+            if (bodySchema.name) inline.description = `Inferred from ${bodySchema.name}`;
+            else if (bodySchema.source) inline.description = `Inferred from ${bodySchema.source.replace('-', ' ')}`;
             // Inferred JSON bodies become named components so they show up in
             // the Schemas browser exactly like NestJS DTOs do.
+            const componentName = bodySchema.name && /^[A-Za-z_][\w]*$/.test(bodySchema.name)
+              ? bodySchema.name
+              : bodySchemaName(httpMethod, openApiPath);
             schema = contentType === 'application/json'
-              ? { $ref: `#/components/schemas/${this.registerSchema(schemas, bodySchemaName(httpMethod, openApiPath), inline)}` }
+              ? { $ref: `#/components/schemas/${this.registerSchema(schemas, componentName, inline)}` }
               : inline;
           }
 

@@ -12,8 +12,10 @@
 [![Author](https://img.shields.io/badge/Author-Mohamed%20Mustafa-blue.svg)](https://github.com/Eng-MMustafa)
 
 <p align="center">
-  <img src="docs/screenshots/01-overview.png" alt="Nest-Scramble documentation overview" width="900" />
+  <img src="docs/marketing/demo.gif" alt="nest-scramble in 20 seconds: log in, the token is captured automatically, a protected request returns 201, a WebSocket event is acknowledged, a GraphQL query runs" width="900" />
 </p>
+
+<p align="center"><em>Log in → token captured automatically → protected request → live WebSocket ack → GraphQL query. Nothing above was annotated.</em></p>
 
 ---
 
@@ -62,10 +64,12 @@ The scanner walks your TypeScript AST and produces the full documentation, conso
 Don't want to touch your app? Run a standalone docs server in **one command** for NestJS or Express projects:
 
 ```bash
-npx nest-scramble serve          # auto-detects NestJS or Express
+npx nest-scramble serve          # auto-detects NestJS or Express — no flags needed
 ```
 
-Then open `http://localhost:3001/docs`.
+Then open `http://localhost:3001/docs`. The backend URL is read from your `.env` / `app.listen(...)`, "Try it" calls are proxied so CORS is never a problem, and `/scramble-mock/*` serves generated data for every documented route.
+
+Need a hosted copy? `npx nest-scramble export` writes a self-contained `docs-site/index.html` you can drop on GitHub Pages or S3.
 
 ---
 
@@ -188,27 +192,29 @@ Scenario files are plain JSON — chained requests, `{{variable}}` capture betwe
 
 ## 🌐 Plain Express / Node.js apps
 
-Not using NestJS? `nest-scramble serve` scans Express route files and starts a docs server without touching your app code.
+Not using NestJS? `nest-scramble serve` scans Express route files and starts a docs server without touching your app code — and it reads the validation you already write.
 
 ```bash
-# standalone docs server (no module import required)
-npx nest-scramble serve
-
-# point live "Try it" / WebSocket / GraphQL requests at your running Express app (enable CORS)
-npx nest-scramble serve --baseUrl http://localhost:4000
+npx nest-scramble serve                                  # that's it
+npx nest-scramble serve --baseUrl https://api.example.com # only if auto-detection guesses wrong
 ```
 
-- Auto-detects NestJS vs Express from `package.json`.
-- Serves the same polished docs UI at `http://localhost:3001/docs`.
-- Generates an OpenAPI spec at `/docs-json`.
-- Resolves mounted routers (`app.use('/api', require('./routes/api'))`).
-- Reads JSDoc summaries, detects bearer-auth routes and file-upload routes.
-- Infers request body schemas from `const { ... } = req.body` destructuring.
-- Discovers Socket.IO events and GraphQL `Query`/`Mutation` operations.
-- Points "Try it" requests at your backend with `--baseUrl` (enable CORS for the
-  best experience).
+**Request bodies come from your real schemas**, whichever style the project uses:
 
-For NestJS projects you still get the richer AST-based scan (DTOs, validations, WebSocket, GraphQL) by importing the module or running `serve`.
+| You write | Docs show |
+|---|---|
+| `z.object({ email: z.string().email(), age: z.number().int().optional() })` — Zod, incl. `.extend/.pick/.partial`, enums, nested schemas across files | `CreateUserSchema` with formats, ranges, enums and required flags |
+| `Joi.object({ status: Joi.string().valid('paid','pending').required() })` / Yup | same, Joi's optional-by-default respected |
+| `body('email').isEmail(), body('age').optional().isInt({ min: 0 })` — express-validator | fields, formats, minimums, required from `.notEmpty()` |
+| `(req: Request<{}, {}, CreateUserDto>, res)` or `req.body as UpdateUserDto` — TypeScript | the interface/class/type, incl. `Partial<>`, `Pick<>`, enums, inheritance, barrels |
+| `const { name, email } = req.body` / `req.body.title` | property list with type guesses and `if (!x)` → required |
+| `PUT` that only does `Object.assign(user, req.body)` | `UpdateUserBody` = the collection's create body, all optional |
+
+**Responses are documented too**: `res.status(404).json({ message: 'User not found' })` becomes a `404` with schema *and* example; `res.json(users)` follows the identifier to your in-memory store or local object; guarded routes get `401` automatically.
+
+Also detected: mounted routers (`app.use('/api', require('./routes/api'))`), JSDoc summaries, bearer-auth middleware, `multer` uploads, Socket.IO events (`socket.on('event')`), and GraphQL `Query`/`Mutation`/`Subscription` operations — parsed with the project's own `graphql` package when present (interfaces, unions, enums, descriptions), regex fallback otherwise.
+
+Groups read like controllers (`Orders`, `Users`, `OrdersGateway`), inferred bodies appear in the Schemas browser, the backend port is detected from `.env` / `app.listen()`, and "Try it" is proxied through the docs server so a backend without CORS works unchanged.
 
 ---
 
@@ -314,7 +320,8 @@ NestScrambleModule.forRoot({
 
 ```bash
 npx nest-scramble init                                   # inject the module — zero code written by you
-npx nest-scramble serve [src]                            # standalone docs server for NestJS or Express
+npx nest-scramble serve [src]                            # standalone docs + mock + proxy, NestJS or Express, zero flags
+npx nest-scramble export [src] -o docs-site              # self-contained index.html for GitHub Pages / S3
 npx nest-scramble generate src -o openapi.json           # OpenAPI | postman | client via --format
 npx nest-scramble doctor src --min-score 80              # docs health gate
 npx nest-scramble diff ./main/src ./src --fail-on-breaking
@@ -342,8 +349,18 @@ Every CLI feature is exported as a typed function — build your own tooling on 
 
 ---
 
-## What's New in v5.7.0
+## What's New in v5.8.0
 
+- **Express bodies from real schemas** — Zod, Joi, Yup, express-validator and TypeScript DTOs (`Request<P, R, Body>`, `as Dto`) are read across files; plain `req.body.x` still works; `PUT` routes inherit the create body as `UpdateXBody`.
+- **Express responses documented** — `res.status(404).json({...})` literals become schemas with examples, and `res.json(users)` follows identifiers to your data.
+- **GraphQL parsed properly** — the project's own `graphql` package handles interfaces, unions, enums, descriptions and `extend type`; regex fallback otherwise.
+- **`serve` needs no flags** — backend port from `.env` / `app.listen()`, Nest `setGlobalPrefix()` honoured, free-port fallback, WebSocket + GraphQL scanned for Nest too.
+- **Same-origin proxy** — "Try it" works against backends without CORS.
+- **Mock server everywhere** — `/scramble-mock/*` for Express and Nest, driven by the OpenAPI document.
+- **`nest-scramble export`** — static, self-contained docs site.
+- **Deep links + `hashchange`** for REST, WebSocket and GraphQL views.
+
+### v5.7.0
 - **Automatic token capture** — log in from the console and the returned bearer token is applied to every request automatically.
 - **Express docs now read like NestJS** — groups named `Orders` / `Users` / `OrdersGateway` instead of file paths, and inferred request bodies appear in the Schemas browser as `CreateUserBody`, `LoginBody`, …
 - **Socket.IO on namespaced gateways** — the WebSocket console connects correctly to `/orders`-style gateways.

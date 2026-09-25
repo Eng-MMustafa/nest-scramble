@@ -1583,7 +1583,20 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       }
       Object.keys(headers).forEach(function (key) { headers[key] = applyVars(headers[key]); });
       if (body && typeof body === 'string') body = applyVars(body);
-      return { url: url, headers: headers, body: body, form: form };
+      // url is what snippets and history show; fetchUrl is what we call —
+      // routed through the standalone docs server's proxy when it offers one,
+      // so a backend without CORS still answers.
+      return { url: url, fetchUrl: viaProxy(url), headers: headers, body: body, form: form };
+    }
+
+    function viaProxy(url) {
+      var proxy = spec && spec['x-scramble-proxy'];
+      var specBase = spec && spec.servers && spec.servers[0] && spec.servers[0].url;
+      var env = activeEnv();
+      if (!proxy || !specBase || (env && env.baseUrl)) return url;
+      var normalized = specBase.replace(/\\/+$/, '');
+      if (url.indexOf(normalized) !== 0) return url;
+      return location.origin + proxy + url.slice(normalized.length);
     }
 
     /** Best-effort filename for a blob downloaded from a URL. */
@@ -1819,7 +1832,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       payload.then(function (bodyPayload) {
         var init = { method: current.method.toUpperCase(), headers: req.headers };
         if (bodyPayload) init.body = bodyPayload;
-        return fetch(req.url, init);
+        return fetch(req.fetchUrl || req.url, init);
       }).then(function (res) {
         return res.text().then(function (text) {
           restoreSend();
@@ -2177,8 +2190,12 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
 
     byId('ws-crumb-overview').addEventListener('click', showOverview);
 
+    /** Deep-link registry for WS / GraphQL views: hash → opener. */
+    var extraViews = {};
+
     function showWsView(gateway, wsEvent, navEl) {
       current = null;
+      try { history.replaceState(null, '', '#' + wsViewId(gateway, wsEvent)); } catch (e) { /* ignore */ }
       byId('welcome').hidden = true;
       byId('request-view').hidden = true;
       byId('ws-view').hidden = false;
@@ -2235,11 +2252,16 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
           '</button>');
           a.setAttribute('data-search', ('ws ' + wsEvent.event + ' ' + (wsEvent.summary || '') + ' ' + gateway.name).toLowerCase());
           a.addEventListener('click', function () { showWsView(gateway, wsEvent, a); });
+          extraViews[wsViewId(gateway, wsEvent)] = function () { group.classList.add('open'); showWsView(gateway, wsEvent, a); };
           itemsEl.appendChild(a);
         });
 
         nav.appendChild(group);
       });
+    }
+
+    function wsViewId(gateway, wsEvent) {
+      return 'ws-' + (gateway.name + '-' + wsEvent.event).replace(/[^a-zA-Z0-9]/g, '-');
     }
 
     /* ------------------------------------------------------------------ *
@@ -2250,8 +2272,13 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
 
     byId('gql-crumb-overview').addEventListener('click', showOverview);
 
+    function gqlViewId(operation) {
+      return 'gql-' + (operation.kind + '-' + operation.name).replace(/[^a-zA-Z0-9]/g, '-');
+    }
+
     function showGqlView(resolver, operation, navEl) {
       current = null;
+      try { history.replaceState(null, '', '#' + gqlViewId(operation)); } catch (e) { /* ignore */ }
       byId('welcome').hidden = true;
       byId('request-view').hidden = true;
       byId('ws-view').hidden = true;
@@ -2323,7 +2350,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       byId('gql-resp').innerHTML = '<div class="resp-empty">Running…</div>';
       byId('gql-resp').scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-      fetch(byId('gql-url').value, {
+      fetch(viaProxy(byId('gql-url').value), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(variables ? { query: query, variables: variables } : { query: query }),
@@ -2374,6 +2401,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
           '</button>');
           a.setAttribute('data-search', ('graphql ' + operation.kind + ' ' + operation.name + ' ' + (operation.summary || '') + ' ' + resolver.name).toLowerCase());
           a.addEventListener('click', function () { showGqlView(resolver, operation, a); });
+          extraViews[gqlViewId(operation)] = function () { group.classList.add('open'); showGqlView(resolver, operation, a); };
           itemsEl.appendChild(a);
         });
 
@@ -2405,9 +2433,19 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
 
     renderHistory();
 
-    fetch(SPEC_URL).then(function (res) {
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      return res.json();
+    // Static exports inline the documents as JSON script tags so the page
+    // works from a file:// URL or any static host with no server at all.
+    function loadDoc(url, inlineId) {
+      var inline = document.getElementById(inlineId);
+      if (inline) {
+        try { return Promise.resolve(JSON.parse(inline.textContent || 'null')); } catch (e) { return Promise.resolve(null); }
+      }
+      return fetch(url).then(function (res) { return res.ok ? res.json() : null; });
+    }
+
+    loadDoc(SPEC_URL, 'scramble-spec').then(function (doc) {
+      if (!doc) throw new Error('spec unavailable');
+      return doc;
     }).then(function (doc) {
       spec = doc;
       var info = spec.info || {};
@@ -2427,33 +2465,43 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       renderOverview(groups);
       renderSidebar(groups);
 
-      var hash = location.hash.slice(1);
-      var bang = hash.indexOf('!');
-      var opKey = bang === -1 ? hash : hash.slice(0, bang);
-      var sharedState = bang === -1 ? null : decodeShare(hash.slice(bang + 1));
-      var fromHash = opKey && opsById[opKey];
-      if (fromHash) {
-        selectOperation(fromHash);
-        if (sharedState) applyShared(sharedState);
+      // Deep links: #op-… selects an operation, #op-…!<state> also restores a
+      // shared request. Applied on load and whenever the hash changes, so
+      // pasting a link into an already-open tab (or using back/forward) works.
+      function applyHash() {
+        var hash = location.hash.slice(1);
+        if (!hash) { if (current) showOverview(); return; }
+        var bang = hash.indexOf('!');
+        var opKey = bang === -1 ? hash : hash.slice(0, bang);
+        var sharedState = bang === -1 ? null : decodeShare(hash.slice(bang + 1));
+        var fromHash = opKey && opsById[opKey];
+        if (fromHash) {
+          if (current && current.id === fromHash.id && !sharedState) return;
+          selectOperation(fromHash);
+          if (sharedState) applyShared(sharedState);
+          return;
+        }
+        // WebSocket / GraphQL consoles register their own deep links once loaded.
+        if (extraViews[opKey]) extraViews[opKey]();
       }
+      applyHash();
+      window.addEventListener('hashchange', applyHash);
 
       // WebSocket gateway docs are optional — hide the section when absent.
-      fetch(SPEC_URL.replace('-json', '-ws-json')).then(function (res) {
-        return res.ok ? res.json() : null;
-      }).then(function (doc) {
+      loadDoc(SPEC_URL.replace('-json', '-ws-json'), 'scramble-ws').then(function (doc) {
         if (doc && doc.gateways && doc.gateways.length) {
           wsDoc = doc;
           renderWsSidebar();
+          if (/^#ws-/.test(location.hash)) applyHash();
         }
       }).catch(function () { /* endpoint not available */ });
 
       // Same for GraphQL resolver docs.
-      fetch(SPEC_URL.replace('-json', '-graphql-json')).then(function (res) {
-        return res.ok ? res.json() : null;
-      }).then(function (doc) {
+      loadDoc(SPEC_URL.replace('-json', '-graphql-json'), 'scramble-graphql').then(function (doc) {
         if (doc && doc.resolvers && doc.resolvers.length) {
           gqlDoc = doc;
           renderGqlSidebar();
+          if (/^#gql-/.test(location.hash)) applyHash();
         }
       }).catch(function () { /* endpoint not available */ });
     }).catch(function (err) {

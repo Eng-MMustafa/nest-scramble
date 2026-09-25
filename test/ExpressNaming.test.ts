@@ -81,6 +81,7 @@ describe('ExpressOpenApiTransformer — named body schemas', () => {
     expect(Object.keys(spec.components.schemas).sort()).toEqual(['CreateUserBody', 'UpdateUserBody']);
     expect(spec.components.schemas.CreateUserBody).toEqual({
       type: 'object',
+      description: 'Inferred from destructuring',
       properties: { name: { type: 'string' }, email: { type: 'string' } },
       required: ['name', 'email'],
     });

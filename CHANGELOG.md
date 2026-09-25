@@ -6,6 +6,52 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [5.8.0] - Unreleased
+
+### Added
+- **Real request bodies for Express** — the scanner now reads the validation
+  developers actually write: **Zod** (`z.object`, chains, `.optional/.default`,
+  enums, nested objects, arrays, `.extend/.pick/.omit/.partial`, references
+  across files), **Joi**, **Yup**, **express-validator** chains (`body('email').isEmail()`),
+  **TypeScript** DTOs from `Request<P, R, Body>` generics, `req.body as Dto`
+  casts and annotations (interfaces, type aliases, classes, enums, `Partial<>`,
+  `Pick<>`, `Omit<>`, inheritance, cross-file imports and barrels), and finally
+  plain `req.body.name` property access with type guesses. Bodies become named
+  components (`CreateUserDto`, `LoginBody`) and PUT/PATCH routes that just do
+  `Object.assign(user, req.body)` inherit the collection's create body as
+  `UpdateUserBody` with every field optional.
+- **Express response documentation** — `res.status(404).json({ message: '…' })`
+  literals become response schemas with examples; identifiers resolve to local
+  objects or module-level stores (`res.json(users)`, `users.find(…)`,
+  `{ ...user, extra }`, ternaries), so every operation gets real response shapes.
+  Guarded routes document `401` automatically.
+- **GraphQL via the real parser** — when the project has the `graphql` package
+  its `parse()` is used (interfaces, unions with inline fragments, enums,
+  descriptions, `extend type`, subscriptions, custom scalars); a tolerant regex
+  parser remains as fallback. SDL is also picked up from `gql` tags, `typeDefs`
+  assignments and `.graphql` files. Variables carry full input-type schemas.
+- **Zero-flag `serve`** — the backend URL is detected from `.env` `PORT=`,
+  `app.listen(4000)`, `process.env.PORT || 4000` or a `PORT` constant; the Nest
+  `setGlobalPrefix()` is honoured; a busy default port falls through to the
+  next free one; WebSocket gateways and GraphQL resolvers are scanned for
+  NestJS projects too.
+- **Same-origin proxy** — `serve` forwards REST/GraphQL "Try it" calls to the
+  backend through `/__scramble_proxy`, so APIs without CORS work unchanged.
+  Snippets and history still show the real URL.
+- **Mock server for every project** — `/scramble-mock/*` on the standalone
+  server answers from the OpenAPI document (examples first, then generated
+  data honouring `$ref`, enums, formats and ranges) for NestJS and Express alike.
+- **`nest-scramble export`** — writes a self-contained `index.html` (UI +
+  inlined OpenAPI/WebSocket/GraphQL documents) plus the raw JSON files for
+  GitHub Pages, S3 or plain file:// use.
+- **Deep links everywhere** — `#op-…`, `#ws-Gateway-event` and
+  `#gql-kind-name` open the matching console, and the page reacts to
+  `hashchange` so pasted links and back/forward work without a reload.
+- README demo GIF and a `docs/marketing/record-demo.js` + `make-gif.py` pair to
+  regenerate it from the live UI.
+
+---
+
 ## [5.7.0] - 2026-09-25
 
 ### Added

@@ -47,13 +47,27 @@ const serveCommand: CommandDef = {
   description: 'Start a standalone docs server for NestJS or Express projects',
   positionals: ['sourcePath'],
   options: [
-    { key: 'port', long: '--port', short: '-p', placeholder: '<port>', default: '3001', description: 'Port for the standalone docs server' },
-    { key: 'baseUrl', long: '--baseUrl', short: '-b', placeholder: '<url>', default: '', description: 'Base URL advertised in the docs' },
+    { key: 'port', long: '--port', short: '-p', placeholder: '<port>', default: '', description: 'Port for the docs server (default 3001, next free port if busy)' },
+    { key: 'baseUrl', long: '--baseUrl', short: '-b', placeholder: '<url>', default: '', description: 'Backend URL for "Try it" (auto-detected from .env / app.listen)' },
     { key: 'title', long: '--title', short: '-t', placeholder: '<title>', default: '', description: 'API title' },
     { key: 'apiVersion', long: '--apiVersion', short: '-v', placeholder: '<version>', default: '', description: 'API version' },
     { key: 'theme', long: '--theme', placeholder: '<theme>', default: 'futuristic', description: 'UI theme: futuristic (dark) or classic (light)' },
     { key: 'primaryColor', long: '--primary-color', placeholder: '<hex>', default: '', description: 'Primary accent colour' },
     { key: 'open', long: '--open', boolean: true, description: 'Open the docs in the default browser' },
+  ],
+};
+
+const exportCommand: CommandDef = {
+  name: 'export',
+  description: 'Export a self-contained static docs site (index.html + JSON) for GitHub Pages, S3, …',
+  positionals: ['sourcePath'],
+  options: [
+    { key: 'output', long: '--output', short: '-o', placeholder: '<dir>', default: 'docs-site', description: 'Output directory' },
+    { key: 'baseUrl', long: '--baseUrl', short: '-b', placeholder: '<url>', default: '', description: 'Backend URL for "Try it" (auto-detected from .env / app.listen)' },
+    { key: 'title', long: '--title', short: '-t', placeholder: '<title>', default: '', description: 'API title' },
+    { key: 'apiVersion', long: '--apiVersion', short: '-v', placeholder: '<version>', default: '', description: 'API version' },
+    { key: 'theme', long: '--theme', placeholder: '<theme>', default: 'futuristic', description: 'UI theme: futuristic (dark) or classic (light)' },
+    { key: 'primaryColor', long: '--primary-color', placeholder: '<hex>', default: '', description: 'Primary accent colour' },
   ],
 };
 
@@ -105,7 +119,7 @@ const testCommand: CommandDef = {
   ],
 };
 
-const COMMANDS = [generateCommand, initCommand, serveCommand, diffCommand, doctorCommand, changelogCommand, testCommand];
+const COMMANDS = [generateCommand, initCommand, serveCommand, exportCommand, diffCommand, doctorCommand, changelogCommand, testCommand];
 
 async function runGenerate(sourcePath: string, options: {
   output: string;
@@ -327,7 +341,8 @@ async function runServe(sourcePath: string, options: {
   const server = new StandaloneDocsServer();
   await server.start({
     sourcePath,
-    port: parseInt(options.port, 10) || 3001,
+    // Undefined lets the server pick the next free port when 3001 is busy.
+    port: options.port ? parseInt(options.port, 10) || undefined : undefined,
     baseUrl: options.baseUrl || undefined,
     title: options.title || undefined,
     version: options.apiVersion || undefined,
@@ -335,6 +350,42 @@ async function runServe(sourcePath: string, options: {
     primaryColor: options.primaryColor || undefined,
     open: options.open,
   });
+}
+
+/**
+ * Writes a static docs site: one self-contained `index.html` (UI + inlined
+ * OpenAPI/WebSocket/GraphQL documents) plus the raw JSON files next to it.
+ */
+async function runExport(sourcePath: string, options: {
+  output: string;
+  baseUrl: string;
+  title: string;
+  apiVersion: string;
+  theme: string;
+  primaryColor: string;
+}): Promise<void> {
+  const { StandaloneDocsServer } = await import('./standalone/StandaloneDocsServer');
+  const { StaticDocsExporter } = await import('./standalone/StaticDocsExporter');
+  const docs = StandaloneDocsServer.buildDocuments({
+    sourcePath,
+    baseUrl: options.baseUrl || undefined,
+    title: options.title || undefined,
+    version: options.apiVersion || undefined,
+  });
+  const outputDir = path.resolve(options.output || 'docs-site');
+  const written = StaticDocsExporter.write(outputDir, {
+    spec: docs.spec,
+    wsDocument: docs.wsDocument,
+    graphqlDocument: docs.graphqlDocument,
+    title: options.title || (docs.spec.info && docs.spec.info.title) || undefined,
+    theme: options.theme === 'classic' ? 'classic' : 'futuristic',
+    primaryColor: options.primaryColor || undefined,
+  });
+  const operations = Object.values<Record<string, unknown>>(docs.spec.paths || {}).reduce((n, ops) => n + Object.keys(ops).length, 0);
+  console.log(`\n✅ Exported ${operations} operations to ${outputDir}`);
+  for (const file of written) console.log(`   ${path.relative(process.cwd(), file)}`);
+  console.log(`\n   Open ${path.join(path.relative(process.cwd(), outputDir), 'index.html')} directly, or publish the folder to GitHub Pages / S3.`);
+  console.log(`   "Try it" targets ${docs.baseUrl} — enable CORS there for live requests.\n`);
 }
 
 function detectAppModulePath(): string {
@@ -562,6 +613,8 @@ async function main(): Promise<void> {
       await runInit(options as Parameters<typeof runInit>[0]);
     } else if (def === serveCommand) {
       await runServe(positionals[0] || '.', options as Parameters<typeof runServe>[1]);
+    } else if (def === exportCommand) {
+      await runExport(positionals[0] || '.', options as Parameters<typeof runExport>[1]);
     } else if (def === doctorCommand) {
       runDoctor(positionals[0], options as Parameters<typeof runDoctor>[1]);
     } else if (def === changelogCommand) {
