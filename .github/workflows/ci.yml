@@ -27,7 +27,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
 
       # Linting does not depend on the Node version, so it runs on one leg of
       # the matrix rather than three.
@@ -60,13 +60,13 @@ jobs:
           node-version: 20.x
           cache: npm
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
 
       # Both adapters are installed so the e2e suite can boot each one. Fastify
       # exposes a different response API, which used to break the docs routes.
       - name: Install NestJS ${{ matrix.nest-version }}
         run: |
-          npm install --no-save \
+          npm install --no-save --ignore-scripts \
             @nestjs/common@^${{ matrix.nest-version }} \
             @nestjs/core@^${{ matrix.nest-version }} \
             @nestjs/platform-express@^${{ matrix.nest-version }} \
@@ -93,7 +93,7 @@ jobs:
           node-version: 20.x
           cache: npm
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
 
       - run: npm run build
 
