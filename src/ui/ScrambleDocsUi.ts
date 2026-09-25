@@ -1521,8 +1521,10 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       // An active environment can override the base URL and fill variables.
       var url = applyVars(byId('url-input').value);
       var env = activeEnv();
-      if (env && env.baseUrl && url.indexOf('http') !== 0) {
-        url = env.baseUrl.replace(/\\/+$/, '') + url;
+      var specBase = spec && spec.servers && spec.servers[0] && spec.servers[0].url;
+      var base = (env && env.baseUrl) || specBase || location.origin;
+      if (base && url.indexOf('http') !== 0) {
+        url = base.replace(/\/+$/, '') + url;
       }
       Object.keys(headers).forEach(function (key) { headers[key] = applyVars(headers[key]); });
       if (body && typeof body === 'string') body = applyVars(body);
@@ -1946,6 +1948,12 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
     var wsConn = null;
 
     function wsUrlFor(gateway) {
+      var specBase = spec && spec.servers && spec.servers[0] && spec.servers[0].url;
+      var env = activeEnv();
+      var backend = (env && env.baseUrl) || specBase;
+      if (backend) {
+        return backend + (gateway.namespace || '');
+      }
       var origin = location.origin;
       if (gateway.port) {
         origin = location.protocol + '//' + location.hostname + ':' + gateway.port;
@@ -2197,8 +2205,13 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       byId('gql-crumb-op').textContent = operation.name;
       byId('gql-kind').textContent = operation.kind.toUpperCase();
       var env = activeEnv();
-      var base = env && env.baseUrl ? env.baseUrl.replace(/\\/+$/, '') : location.origin;
-      byId('gql-url').value = base + '/graphql';
+
+      var specBase = spec && spec.servers && spec.servers[0] && spec.servers[0].url;
+
+      var base = (env && env.baseUrl) || specBase || location.origin;
+
+      byId('gql-url').value = base.replace(/\/+$/, '') + '/graphql';
+
       byId('gql-summary').textContent = operation.summary || '';
       byId('gql-query').value = operation.sample || '';
       // Pre-fill variables with realistic values derived from the argument
