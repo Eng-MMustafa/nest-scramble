@@ -21,6 +21,7 @@ export class ExpressOpenApiTransformer {
     baseUrl = 'http://localhost:3000',
   ): OpenApiSpec {
     const paths: Record<string, Record<string, any>> = {};
+    let hasAuth = false;
 
     for (const controller of controllers) {
       const tag = controller.name;
@@ -33,7 +34,7 @@ export class ExpressOpenApiTransformer {
           paths[openApiPath] = {};
         }
 
-        paths[openApiPath][httpMethod] = {
+        const operation: any = {
           tags: route.tags || [tag],
           summary: route.summary || `${httpMethod.toUpperCase()} ${openApiPath}`,
           description: route.description,
@@ -41,7 +42,27 @@ export class ExpressOpenApiTransformer {
           parameters: route.parameters || [],
           responses: route.responses || { '200': { description: 'OK' } },
         };
+
+        if (route.consumes) {
+          operation.requestBody = {
+            content: Object.fromEntries(route.consumes.map((c) => [c, { schema: {} }])),
+          };
+        }
+
+        if (route.security) {
+          operation.security = route.security;
+          hasAuth = true;
+        }
+
+        paths[openApiPath][httpMethod] = operation;
       }
+    }
+
+    const components: any = { schemas: {} };
+    if (hasAuth) {
+      components.securitySchemes = {
+        bearerAuth: { type: 'http', scheme: 'bearer' },
+      };
     }
 
     return {
@@ -49,7 +70,7 @@ export class ExpressOpenApiTransformer {
       info: { title, version, description: 'Auto-generated from Express route files.' },
       servers: [{ url: baseUrl }],
       paths,
-      components: { schemas: {} },
+      components,
     };
   }
 

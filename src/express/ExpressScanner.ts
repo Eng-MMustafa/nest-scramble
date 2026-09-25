@@ -11,6 +11,9 @@ export interface ExpressRouteInfo {
   tags?: string[];
   parameters?: any[];
   responses?: Record<string, any>;
+  security?: any[];
+  hasFileUpload?: boolean;
+  consumes?: string[];
 }
 
 export interface ExpressControllerInfo {
@@ -52,7 +55,7 @@ interface ParsedFile {
  * declaration patterns. Because Express routing is dynamic, this cannot be
  * 100% exhaustive without executing the app, but it covers the conventions
  * used by the vast majority of projects (app/router method chains, app.use
- * mounts, and route() builders).
+ * mounts, route() builders and JSDoc summaries).
  */
 export class ExpressScanner {
   /**
@@ -101,7 +104,7 @@ export class ExpressScanner {
         name: tag,
         filePath: item.filePath,
         basePath: '',
-        routes: item.routes,
+        routes: item.routes.map((r) => ({ ...r, tags: r.tags || [tag] })),
       });
     }
 
@@ -144,20 +147,49 @@ export class ExpressScanner {
   private static extractRoutes(text: string): ExpressRouteInfo[] {
     const routes: ExpressRouteInfo[] = [];
 
-    // 1. Direct method calls: app.get('/users', ...), router.post('/users', ...)
-    const methodPattern = new RegExp(
-      `(?:app|router|route|server)\\.(${ROUTE_METHODS.join('|')})\\s*\\(\\s*['"\`]([^'"\`]+)['"\`]`,
-      'g',
-    );
+    // Capture route-builder declarations so we can associate chained calls.
+    const routeBuilderPattern = /(?:app|router|server)\.route\s*\(\s*['"\`]([^'"\`]+)['"\`]\s*\)/g;
+    const routeBuilders: { index: number; path: string }[] = [];
     let match: RegExpExecArray | null;
-    while ((match = methodPattern.exec(text)) !== null) {
-      routes.push(this.buildRoute(match[1], match[2]));
+    while ((match = routeBuilderPattern.exec(text)) !== null) {
+      routeBuilders.push({ index: match.index, path: match[1] });
     }
 
-    // 2. app.route('/users').get(...)
-    const routeBuilderPattern = /(?:app|router|server)\.route\s*\(\s*['"\`]([^'"\`]+)['"\`]\s*\)/g;
-    while ((match = routeBuilderPattern.exec(text)) !== null) {
-      routes.push(this.buildRoute('all', match[1], 'Route builder'));
+    // Direct method calls: app.get('/users', ...), router.post('/users', requireAuth, ...)
+    // Capture the full argument list so we can spot middleware and upload handlers.
+    const methodPattern = new RegExp(
+      `(?:app|router|route|server)\\.(${ROUTE_METHODS.join('|')})\\s*\\(\\s*['"\`]([^'"\`]+)['"\`]\\s*(?:,\\s*([^)]*))?\\s*\\)`,
+      'g',
+    );
+
+    while ((match = methodPattern.exec(text)) !== null) {
+      const method = match[1];
+      const rawPath = match[2];
+      const middlewareArgs = match[3] || '';
+      const start = match.index;
+
+      // Find the closest preceding route builder if this call is chained.
+      let builderPath: string | undefined;
+      for (let i = routeBuilders.length - 1; i >= 0; i--) {
+        if (routeBuilders[i].index < start) {
+          builderPath = routeBuilders[i].path;
+          break;
+        }
+      }
+
+      const { summary, description } = this.extractPrecedingJsDoc(text, start);
+      const body = this.extractHandlerBody(text, start);
+      const combined = `${middlewareArgs} ${body}`;
+
+      routes.push(
+        this.buildRoute(
+          builderPath ? 'all' : method,
+          builderPath || rawPath,
+          summary,
+          description,
+          combined,
+        ),
+      );
     }
 
     return routes;
@@ -242,14 +274,21 @@ export class ExpressScanner {
   private static prefixRoute(route: ExpressRouteInfo, prefix: string): ExpressRouteInfo {
     const normalizedPrefix = prefix.replace(/\/$/, '');
     const normalizedPath = route.path === '/' ? '' : route.path.startsWith('/') ? route.path : `/${route.path}`;
+    const fullPath = normalizedPrefix + normalizedPath;
     return {
       ...route,
-      path: normalizedPrefix + normalizedPath,
-      summary: `${route.summary} (${normalizedPrefix})`,
+      path: fullPath,
+      summary: `${route.method.toUpperCase()} ${fullPath}`,
     };
   }
 
-  private static buildRoute(method: string, rawPath: string, summary?: string): ExpressRouteInfo {
+  private static buildRoute(
+    method: string,
+    rawPath: string,
+    summary?: string,
+    description?: string,
+    body?: string,
+  ): ExpressRouteInfo {
     const cleanPath = rawPath.replace(/\?:/g, ':').replace(/\?/g, '');
     const parameters: any[] = [];
     const pathWithBraces = cleanPath.replace(/:([^/]+)/g, (_, name) => {
@@ -262,16 +301,87 @@ export class ExpressScanner {
       return `{${name}}`;
     });
 
+    const responses: Record<string, any> = { '200': { description: 'OK' } };
+    if (body) {
+      if (/res\.status\s*\(\s*201\s*\)/.test(body)) responses['201'] = { description: 'Created' };
+      if (/res\.status\s*\(\s*204\s*\)/.test(body)) responses['204'] = { description: 'No Content' };
+      if (/res\.status\s*\(\s*400\s*\)/.test(body)) responses['400'] = { description: 'Bad Request' };
+      if (/res\.status\s*\(\s*401\s*\)/.test(body)) responses['401'] = { description: 'Unauthorized' };
+      if (/res\.status\s*\(\s*404\s*\)/.test(body)) responses['404'] = { description: 'Not Found' };
+    }
+
+    const hasFileUpload = body ? /upload\.(single|array|fields|any)\s*\(/.test(body) : false;
+    const consumes = hasFileUpload ? ['multipart/form-data'] : body && /req\.body/.test(body) ? ['application/json'] : undefined;
+
+    const security = body && /requireAuth|isAuthenticated|authMiddleware|ensureAuth|passport\.authenticate/.test(body)
+      ? [{ bearerAuth: [] }]
+      : undefined;
+
     return {
       method,
       path: pathWithBraces,
       summary: summary || `${method.toUpperCase()} ${cleanPath}`,
+      description,
       handlerName: undefined,
       parameters,
-      responses: {
-        '200': { description: 'OK' },
-      },
+      responses,
+      security,
+      hasFileUpload,
+      consumes,
     };
+  }
+
+  private static extractPrecedingJsDoc(text: string, routeIndex: number): { summary?: string; description?: string } {
+    const preceding = text.slice(0, routeIndex);
+    const match = /\/\*\*([\s\S]*?)\*\/$/.exec(preceding);
+    if (!match) return {};
+
+    const lines = match[1]
+      .split('\n')
+      .map((line) => line.replace(/^\s*\*\s?/, '').trim())
+      .filter((line) => line.length > 0 && !line.startsWith('@'));
+
+    if (lines.length === 0) return {};
+    return { summary: lines[0], description: lines.slice(1).join('\n') || undefined };
+  }
+
+  private static extractHandlerBody(text: string, routeIndex: number): string {
+    const after = text.slice(routeIndex);
+    // Find the opening brace of the arrow function / function body.
+    const bodyStart = after.search(/=>\s*\{|function\s*\([^)]*\)\s*\{/);
+    if (bodyStart === -1) return '';
+
+    let depth = 0;
+    let inString: string | null = null;
+    let escaped = false;
+    const body = after.slice(bodyStart);
+
+    for (let i = 0; i < body.length; i++) {
+      const char = body[i];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === '\\' && inString) {
+        escaped = true;
+        continue;
+      }
+      if (inString) {
+        if (char === inString) inString = null;
+        continue;
+      }
+      if (char === '"' || char === "'" || char === '`') {
+        inString = char;
+        continue;
+      }
+      if (char === '{') depth++;
+      if (char === '}') {
+        depth--;
+        if (depth === 0) return body.slice(0, i + 1);
+      }
+    }
+
+    return body;
   }
 
   private static fileTag(filePath: string, sourcePath: string): string {
