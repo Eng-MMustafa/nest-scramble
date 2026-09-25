@@ -2010,7 +2010,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       // Load the Socket.IO client from the backend URL so cross-origin docs
       // servers can still connect without a local Socket.IO server.
       var script = document.createElement('script');
-      var origin = backendUrl.indexOf('http') === 0 ? backendUrl.replace(/\/+$/, '') : location.origin;
+      var origin = backendUrl.indexOf('http') === 0 ? backendUrl.replace(/\\/+$/, '') : location.origin;
       script.src = origin + '/socket.io/socket.io.js';
       script.onload = function () { callback(window.io || null); };
       script.onerror = function () { callback(null); };
