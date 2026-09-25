@@ -6,6 +6,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [5.7.0] - 2026-09-25
+
+### Added
+- **Automatic token capture** — when a REST or GraphQL response carries a
+  bearer token (`access_token`, `accessToken`, `token`, `jwt`, `id_token`, …),
+  the console sets it as the global Authorization automatically and shows a
+  toast. Log in once, then every protected request just works — no copy/paste,
+  no Postman-style scripts.
+- **Express groups read like controllers** — `routes/orders.js` → `Orders`,
+  `users.routes.ts` → `Users`, `websocket/orders.gateway.js` → `OrdersGateway`,
+  colliding names are disambiguated by directory (`AdminUsers` / `PublicUsers`).
+- **Express body schemas in the Schemas browser** — inferred JSON bodies are
+  registered as named components (`CreateUserBody`, `UpdateUserBody`,
+  `LoginBody`) and referenced from the operations, so the Overview shows a
+  Schemas card and model browser exactly like a NestJS project.
+
+### Fixed
+- **Socket.IO client on namespaced gateways** — the console loaded
+  `socket.io.js` from the full gateway URL (`http://host:3000/orders/socket.io/…`)
+  and failed. It now resolves the backend origin first.
+
+---
+
 ## [5.6.1] - 2026-09-25
 
 ### Fixed

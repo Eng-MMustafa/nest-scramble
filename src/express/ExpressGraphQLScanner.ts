@@ -1,6 +1,7 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
 import * as fs from 'fs';
 import * as path from 'path';
+import { friendlyNames } from './ExpressNaming';
 
 export interface ExpressGraphQLArg {
   name: string;
@@ -39,26 +40,25 @@ export class ExpressGraphQLScanner {
     const absolutePath = path.resolve(sourcePath);
     if (!fs.existsSync(absolutePath)) return [];
 
-    const files = this.collectFiles(absolutePath);
-    const resolvers: ExpressGraphQLResolver[] = [];
+    const found: { file: string; operations: ExpressGraphQLOperation[] }[] = [];
 
-    for (const file of files) {
+    for (const file of this.collectFiles(absolutePath)) {
       const text = fs.readFileSync(file, 'utf-8');
       const sdl = this.extractSdl(text, file);
       if (!sdl) continue;
 
       const operations = this.parseOperations(sdl);
-      if (operations.length === 0) continue;
-
-      const relative = path.relative(absolutePath, file).replace(/[\\/]/g, '/');
-      const baseName = path.basename(file, path.extname(file));
-      const dirName = path.dirname(relative);
-      const tag = dirName === '.' ? baseName : `${dirName}/${baseName}`;
-
-      resolvers.push({ name: tag, filePath: file, operations });
+      if (operations.length > 0) found.push({ file, operations });
     }
 
-    return resolvers;
+    // A lone `schema.js`/`typeDefs.ts` is simply the project's GraphQL API;
+    // named schema files (`posts.graphql`) read as `PostsResolver`.
+    const names = friendlyNames(found.map((f) => f.file));
+    return found.map(({ file, operations }) => {
+      const name = names.get(file) || path.basename(file, path.extname(file));
+      const generic = /^(Schema|Typedefs|TypeDefs|Graphql|GraphQL)$/i.test(name);
+      return { name: generic ? 'GraphQL' : `${name}Resolver`, filePath: file, operations };
+    });
   }
 
   private static collectFiles(dir: string, out: string[] = [], depth = 0): string[] {

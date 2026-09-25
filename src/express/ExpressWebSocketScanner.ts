@@ -1,6 +1,7 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
 import * as fs from 'fs';
 import * as path from 'path';
+import { friendlyNames } from './ExpressNaming';
 
 export interface ExpressWebSocketEvent {
   event: string;
@@ -28,31 +29,25 @@ export class ExpressWebSocketScanner {
     const absolutePath = path.resolve(sourcePath);
     if (!fs.existsSync(absolutePath)) return [];
 
-    const gateways: ExpressWebSocketGateway[] = [];
-    const files = this.collectFiles(absolutePath);
+    const found: { file: string; events: ExpressWebSocketEvent[] }[] = [];
 
-    for (const file of files) {
+    for (const file of this.collectFiles(absolutePath)) {
       const text = fs.readFileSync(file, 'utf-8');
       if (!/socket\.on\s*\(/.test(text) && !/io\.on\s*\(\s*['"]connection['"]/.test(text)) {
         continue;
       }
 
       const events = this.extractEvents(text);
-      if (events.length === 0) continue;
-
-      const relative = path.relative(absolutePath, file).replace(/[\\/]/g, '/');
-      const baseName = path.basename(file, path.extname(file));
-      const dirName = path.dirname(relative);
-      const tag = dirName === '.' ? baseName : `${dirName}/${baseName}`;
-
-      gateways.push({
-        name: tag,
-        filePath: file,
-        events,
-      });
+      if (events.length > 0) found.push({ file, events });
     }
 
-    return gateways;
+    // `websocket/orders.gateway.js` reads as `OrdersGateway`, like a Nest gateway.
+    const names = friendlyNames(found.map((f) => f.file));
+    return found.map(({ file, events }) => ({
+      name: names.get(file) || path.basename(file, path.extname(file)),
+      filePath: file,
+      events,
+    }));
   }
 
   private static collectFiles(dir: string, out: string[] = [], depth = 0): string[] {

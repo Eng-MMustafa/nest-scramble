@@ -1,5 +1,6 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
 import { ExpressControllerInfo, ExpressRouteInfo } from './ExpressScanner';
+import { bodySchemaName } from './ExpressNaming';
 
 export interface OpenApiSpec {
   openapi: string;
@@ -21,6 +22,7 @@ export class ExpressOpenApiTransformer {
     baseUrl = 'http://localhost:3000',
   ): OpenApiSpec {
     const paths: Record<string, Record<string, any>> = {};
+    const schemas: Record<string, any> = {};
     let hasAuth = false;
 
     for (const controller of controllers) {
@@ -45,9 +47,15 @@ export class ExpressOpenApiTransformer {
 
         if (route.consumes || route.bodySchema) {
           const contentType = route.consumes?.[0] || 'application/json';
-          const schema = route.bodySchema
-            ? { type: 'object', properties: route.bodySchema.properties, required: route.bodySchema.required }
-            : {};
+          let schema: any = {};
+          if (route.bodySchema) {
+            const inline = { type: 'object', properties: route.bodySchema.properties, required: route.bodySchema.required };
+            // Inferred JSON bodies become named components so they show up in
+            // the Schemas browser exactly like NestJS DTOs do.
+            schema = contentType === 'application/json'
+              ? { $ref: `#/components/schemas/${this.registerSchema(schemas, bodySchemaName(httpMethod, openApiPath), inline)}` }
+              : inline;
+          }
 
           operation.requestBody = {
             content: { [contentType]: { schema } },
@@ -71,7 +79,7 @@ export class ExpressOpenApiTransformer {
       }
     }
 
-    const components: any = { schemas: {} };
+    const components: any = { schemas };
     if (hasAuth) {
       components.securitySchemes = {
         bearerAuth: { type: 'http', scheme: 'bearer' },
@@ -85,6 +93,18 @@ export class ExpressOpenApiTransformer {
       paths,
       components,
     };
+  }
+
+  /** Adds a schema under `name`, suffixing on collision with a different shape. */
+  private registerSchema(schemas: Record<string, any>, name: string, schema: any): string {
+    const serialized = JSON.stringify(schema);
+    let candidate = name;
+    let counter = 2;
+    while (schemas[candidate] && JSON.stringify(schemas[candidate]) !== serialized) {
+      candidate = `${name}${counter++}`;
+    }
+    schemas[candidate] = schema;
+    return candidate;
   }
 
   private operationId(tag: string, route: ExpressRouteInfo): string {

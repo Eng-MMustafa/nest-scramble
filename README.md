@@ -85,6 +85,7 @@ A complete, self-contained API client served at `/docs` — **no CDN, no externa
 
 - **Params · Auth · Headers · Body · Docs · Code tabs** — path/query params sync live with the URL bar, per-request or global auth (Bearer/API-key/Basic), generated snippets for curl, fetch, axios and more.
 - **Auth panel** — per-request or global Bearer, API-key or Basic credentials.
+- **Automatic token capture** — hit your login endpoint once; if the response carries an `access_token` / `token` / `jwt`, it becomes the global Bearer token instantly. Every protected request after that just works — no copy/paste, no scripts.
 
 <p align="center">
   <img src="docs/screenshots/04-auth-panel.png" alt="Auth panel with Bearer token" width="900" />
@@ -341,8 +342,11 @@ Every CLI feature is exported as a typed function — build your own tooling on 
 
 ---
 
-## What's New in v5.6.x
+## What's New in v5.7.0
 
+- **Automatic token capture** — log in from the console and the returned bearer token is applied to every request automatically.
+- **Express docs now read like NestJS** — groups named `Orders` / `Users` / `OrdersGateway` instead of file paths, and inferred request bodies appear in the Schemas browser as `CreateUserBody`, `LoginBody`, …
+- **Socket.IO on namespaced gateways** — the WebSocket console connects correctly to `/orders`-style gateways.
 - **5.6.1** — GraphQL `input` types expand into pre-filled mutation variables, fixed the variables placeholder, cleaner inline console script, and npm metadata that finally says Express/Fastify/WebSocket/GraphQL out loud.
 - **`npx nest-scramble serve`** — one-command standalone docs server for NestJS or Express projects. No module import needed.
 - **Express route scanning** — auto-detect Express apps and document `app/router` method routes, `app.use()` mounts and `app.route()` builders.

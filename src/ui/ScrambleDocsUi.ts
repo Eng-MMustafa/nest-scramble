@@ -348,6 +348,9 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       byId('auth-btn').classList.toggle('auth-on', auth.type === 'bearer' || auth.type === 'apikey');
     }
 
+    /** Programmatically sets the global auth and syncs the popover. */
+    var setGlobalAuth = null;
+
     (function initAuthPop() {
       var pop = byId('auth-pop');
       var typeEl = byId('auth-type');
@@ -372,6 +375,13 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
         if (current) { renderAuthPanel(); renderHeadersPanel(); }
       }
 
+      setGlobalAuth = function (next) {
+        typeEl.value = next.type || 'none';
+        tokenEl.value = next.token || '';
+        headerEl.value = next.header || '';
+        persist();
+      };
+
       typeEl.addEventListener('change', persist);
       tokenEl.addEventListener('input', persist);
       headerEl.addEventListener('input', persist);
@@ -383,6 +393,51 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       pop.addEventListener('click', function (event) { event.stopPropagation(); });
       document.addEventListener('click', function () { pop.hidden = true; });
     })();
+
+    /* ------------------------------------------------------------------ *
+     * Token capture — a successful response that carries a bearer token
+     * (login, refresh, …) becomes the global Authorization automatically,
+     * so the next protected request just works. Postman needs a script for
+     * this; here it is the default.
+     * ------------------------------------------------------------------ */
+
+    var TOKEN_KEYS = ['access_token', 'accessToken', 'access-token', 'token', 'jwt', 'id_token', 'idToken', 'bearer', 'authToken', 'auth_token'];
+
+    function findToken(value, depth) {
+      if (!value || typeof value !== 'object' || depth > 3) return null;
+      for (var i = 0; i < TOKEN_KEYS.length; i++) {
+        var candidate = value[TOKEN_KEYS[i]];
+        if (typeof candidate === 'string' && candidate.length >= 8 && candidate.indexOf(' ') === -1) return candidate;
+      }
+      var keys = Object.keys(value);
+      for (var j = 0; j < keys.length; j++) {
+        var nested = findToken(value[keys[j]], depth + 1);
+        if (nested) return nested;
+      }
+      return null;
+    }
+
+    function captureToken(text) {
+      var parsed;
+      try { parsed = JSON.parse(text); } catch (e) { return false; }
+      var token = findToken(parsed, 0);
+      if (!token || !setGlobalAuth) return false;
+      var currentAuth = getAuth();
+      if (currentAuth.type === 'bearer' && currentAuth.token === token) return false;
+      setGlobalAuth({ type: 'bearer', token: token, header: currentAuth.header || '' });
+      toast('Bearer token captured — applied to all requests');
+      return true;
+    }
+
+    function toast(message) {
+      var node = el('<div class="toast">' + esc(message) + '</div>');
+      document.body.appendChild(node);
+      requestAnimationFrame(function () { node.classList.add('show'); });
+      setTimeout(function () {
+        node.classList.remove('show');
+        setTimeout(function () { node.remove(); }, 300);
+      }, 3200);
+    }
 
     /* ------------------------------------------------------------------ *
      * Environments (Postman-style: base URL + {{variables}}, persisted)
@@ -1791,6 +1846,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
 
           byId('copy-resp').hidden = false;
           byId('dl-resp').hidden = false;
+          if (res.ok && isJson) captureToken(text);
           pushHistory({
             opId: current.id, method: current.method, url: req.url,
             status: res.status, ms: ms, at: new Date().toLocaleTimeString(),
@@ -2009,8 +2065,11 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       if (window.io) return callback(window.io);
       // Load the Socket.IO client from the backend URL so cross-origin docs
       // servers can still connect without a local Socket.IO server.
+      // Only the origin matters: a namespaced URL like http://host:3000/orders
+      // must still fetch http://host:3000/socket.io/socket.io.js.
+      var origin = location.origin;
+      try { origin = new URL(backendUrl, location.href).origin; } catch (e) { /* keep docs origin */ }
       var script = document.createElement('script');
-      var origin = backendUrl.indexOf('http') === 0 ? backendUrl.replace(/\\/+$/, '') : location.origin;
       script.src = origin + '/socket.io/socket.io.js';
       script.onload = function () { callback(window.io || null); };
       script.onerror = function () { callback(null); };
@@ -2277,6 +2336,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
         var pretty = r.text;
         try { pretty = JSON.stringify(JSON.parse(r.text), null, 2); } catch (e) { /* keep raw */ }
         byId('gql-resp').innerHTML = '<pre class="code">' + hljson(pretty) + '</pre>';
+        if (r.res.ok && pretty.indexOf('"errors"') === -1) captureToken(r.text);
         byId('gql-resp').scrollIntoView({ behavior: 'smooth', block: 'center' });
       }).catch(function (err) {
         byId('gql-resp').innerHTML = '<div class="resp-empty">Request failed — ' + esc(String(err)) + '. Is a GraphQL endpoint mounted at this URL?</div>';
@@ -2542,6 +2602,16 @@ function buildCss(accent: string): string {
     [data-theme='dark'] .icon-sun { display: none; }
     [data-theme='light'] .icon-moon { display: none; }
     .btn-ghost.auth-on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+    /* ---- Toast ---- */
+    .toast {
+      position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 16px);
+      background: var(--bg-2); color: var(--fg-1); border: 1px solid var(--accent);
+      box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.45), 0 0 0 3px var(--ring);
+      border-radius: 10px; padding: 10px 16px; font-size: 13px; font-weight: 600;
+      opacity: 0; transition: opacity 0.25s ease, transform 0.25s ease; z-index: 1000; pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
     /* ---- Auth popover ---- */
     .auth-pop {

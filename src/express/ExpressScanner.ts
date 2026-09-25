@@ -1,6 +1,7 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
 import * as fs from 'fs';
 import * as path from 'path';
+import { friendlyNames } from './ExpressNaming';
 
 export interface ExpressRouteInfo {
   method: string;
@@ -76,9 +77,13 @@ export class ExpressScanner {
 
     const controllers: ExpressControllerInfo[] = [];
     const mountedTargets = new Set(mounts.map((m) => m.targetFile));
+    const withRoutes = parsed.filter((item) => item.routes.length > 0);
+    // Group labels read like NestJS controller names (`Orders`, `Users`)
+    // instead of file paths, disambiguated by directory on collision.
+    const names = friendlyNames(withRoutes.map((item) => item.filePath));
 
-    for (const item of parsed) {
-      if (item.routes.length === 0) continue;
+    for (const item of withRoutes) {
+      const tag = names.get(item.filePath) || this.fileTag(item.filePath, absolutePath);
 
       // Router files that are mounted elsewhere have their routes prefixed
       // by the mount declaration and emitted under the mount point instead
@@ -87,19 +92,14 @@ export class ExpressScanner {
         const itemMounts = mounts.filter((m) => m.targetFile === item.filePath);
         for (const mount of itemMounts) {
           controllers.push({
-            name: this.fileTag(item.filePath, absolutePath),
+            name: tag,
             filePath: item.filePath,
             basePath: mount.prefix,
-            routes: item.routes.map((r) => this.prefixRoute(r, mount.prefix)),
+            routes: item.routes.map((r) => ({ ...this.prefixRoute(r, mount.prefix), tags: r.tags || [tag] })),
           });
         }
         continue;
       }
-
-      const relative = path.relative(absolutePath, item.filePath);
-      const baseName = path.basename(item.filePath, path.extname(item.filePath));
-      const dirName = path.dirname(relative).replace(/[\\/]/g, '/');
-      const tag = dirName === '.' ? baseName : `${dirName}/${baseName}`;
 
       controllers.push({
         name: tag,
