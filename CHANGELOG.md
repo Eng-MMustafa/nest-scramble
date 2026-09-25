@@ -14,7 +14,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
   CORS-blocked), the console answers from the documented example/schema and
   labels it **MOCK** with a note explaining why. Static exports on GitHub Pages
   are therefore explorable end-to-end with no server at all. History entries
-  are tagged too.
+  are tagged too. The WebSocket console does the same: when the Socket.IO
+  client cannot be loaded from the gateway origin it enters a `mock` state and
+  answers sent events with acks generated from the documented response schema.
+- Token-shaped examples: `access_token`/`token`/`jwt` fields get a JWT-looking
+  placeholder and `token_type` is `bearer`, so mocked logins read naturally.
 
 ### Fixed
 - Numeric examples for `id`, `count`, `page`, `limit`… are whole numbers (`1`,

@@ -2094,8 +2094,9 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
     function setWsStatus(state) {
       wsState = state;
       var chip = byId('ws-status');
-      chip.textContent = state;
-      chip.className = 'chip ' + (state === 'connected' ? 'chip-ok' : state === 'error' ? 'chip-err' : '');
+      var isMock = state === 'connected' && wsConn && wsConn.kind === 'mock';
+      chip.textContent = isMock ? 'mock' : state;
+      chip.className = 'chip ' + (isMock ? 'chip-mock' : state === 'connected' ? 'chip-ok' : state === 'error' ? 'chip-err' : '');
       byId('ws-connect').textContent = state === 'connected' ? 'Disconnect' : 'Connect';
       if (state === 'connected' && wsPendingSend) {
         wsPendingSend = false;
@@ -2151,7 +2152,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       if (!wsConn) return;
       try {
         if (wsConn.kind === 'socketio') wsConn.socket.disconnect();
-        else wsConn.socket.close();
+        else if (wsConn.socket) wsConn.socket.close();
       } catch (e) { /* already closed */ }
       wsConn = null;
       setWsStatus('disconnected');
@@ -2186,10 +2187,14 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
 
       loadSocketIo(url, function (io) {
         if (!io) {
-          setWsStatus('error');
+          // The gateway's origin is unreachable (down, not deployed, CORS).
+          // Same policy as REST/GraphQL: keep the console usable with a
+          // clearly-labelled mock that answers from the documented schema.
           var origin = url;
           try { origin = new URL(url, location.href).origin; } catch (e) { /* keep */ }
-          wsLog('sys', 'error', 'Could not load the Socket.IO client from ' + origin + ' — is the API running there? If it uses plain WebSockets, switch the transport to Raw WebSocket.');
+          wsConn = { kind: 'mock', socket: null };
+          wsLog('sys', 'mock', 'Could not reach ' + origin + ' — the API is not running there, or it blocks cross-origin requests. Events you send will be answered from the documented response schema (MOCK). If your gateway uses plain WebSockets, switch the transport to Raw WebSocket.');
+          setWsStatus('connected');
           return;
         }
         var socket = io(url, { transports: ['websocket', 'polling'] });
@@ -2224,6 +2229,12 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
         try { data = JSON.parse(text); } catch (e) { data = text; }
       }
 
+      if (wsConn.kind === 'mock') {
+        wsLog('out', name, data);
+        var generated = wsCurrentEvent && wsCurrentEvent.response ? exampleOf(wsCurrentEvent.response, 0) : null;
+        setTimeout(function () { wsLog('in', name + ' · ack · MOCK', generated === null ? { received: name } : generated); }, 250);
+        return;
+      }
       if (wsConn.kind === 'socketio') {
         wsConn.socket.emit(name, data, function (ack) { wsLog('in', name + ' · ack', ack); });
       } else {
@@ -2252,9 +2263,14 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
 
     /** Deep-link registry for WS / GraphQL views: hash → opener. */
     var extraViews = {};
+    var wsCurrentEvent = null;
 
     function showWsView(gateway, wsEvent, navEl) {
       current = null;
+      wsCurrentEvent = wsEvent;
+      // A mock "connection" belongs to the gateway origin, not the event —
+      // but drop it when the URL changes so a real connect is attempted.
+      if (wsConn && wsConn.kind === 'mock' && byId('ws-url').value !== wsUrlFor(gateway)) wsDisconnect();
       try { history.replaceState(null, '', '#' + wsViewId(gateway, wsEvent)); } catch (e) { /* ignore */ }
       byId('welcome').hidden = true;
       byId('request-view').hidden = true;
@@ -2741,6 +2757,7 @@ function buildCss(accent: string): string {
       margin: 0 0 10px; padding: 10px 12px; border-radius: 8px; font-size: 12.5px; line-height: 1.5;
       background: #f6ad5514; color: var(--fg-2); border-left: 3px solid #f6ad55;
     }
+    .chip-mock { background: #f6ad5522; color: #f6ad55; }
 
     /* ---- Toast ---- */
     .toast {

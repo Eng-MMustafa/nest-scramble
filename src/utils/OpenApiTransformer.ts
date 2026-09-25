@@ -764,6 +764,14 @@ export class OpenApiTransformer {
       return 'SecurePassword123!';
     }
 
+    // Auth tokens: a JWT-shaped placeholder, and the RFC 6750 scheme name.
+    if (lowerName === 'token_type' || lowerName === 'tokentype') {
+      return 'bearer';
+    }
+    if (/(access|refresh|id|auth)?_?token$|^jwt$|apikey|api_key/.test(lowerName)) {
+      return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIn0.sample-signature';
+    }
+
     // Username pattern
     if (lowerName.includes('username')) {
       return 'johndoe';
