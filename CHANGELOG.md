@@ -6,6 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [5.8.1] - Unreleased
+
+### Added
+- **Mock fallback when the backend is unreachable** — if a REST or GraphQL
+  "Try it" call fails at the network level (API down, not deployed yet, or
+  CORS-blocked), the console answers from the documented example/schema and
+  labels it **MOCK** with a note explaining why. Static exports on GitHub Pages
+  are therefore explorable end-to-end with no server at all. History entries
+  are tagged too.
+
+### Fixed
+- Numeric examples for `id`, `count`, `page`, `limit`… are whole numbers (`1`,
+  not `1.5`) — GraphQL variables like `{ "id": 1 }` now validate.
+- Clearer WebSocket error naming the origin the Socket.IO client could not be
+  loaded from.
+
+---
+
 ## [5.8.0] - 2026-09-25
 
 ### Added

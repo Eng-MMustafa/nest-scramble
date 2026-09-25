@@ -1,6 +1,6 @@
 {
   "name": "nest-scramble",
-  "version": "5.8.0",
+  "version": "5.8.1",
   "description": "Zero-config API documentation for NestJS and Express: OpenAPI docs, live REST/WebSocket/GraphQL consoles, mock server, Postman export and typed SDK generation from static analysis — no decorators required",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -615,7 +615,9 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
         case 'integer':
         case 'number':
           if (schema.minimum !== undefined) return schema.minimum;
-          return schema.type === 'integer' ? 1 : 1.5;
+          // ids, counts, pages… are whole numbers even when typed as number.
+          if (schema.type === 'integer' || /(^|_)(id|count|page|limit|offset|size|qty|quantity|age|total|index|year)$/i.test(name || '')) return 1;
+          return 1.5;
         case 'boolean':
           return true;
         case 'string': {
@@ -925,7 +927,8 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
           '<span class="nav-text">' +
             '<span class="nav-name">' + esc(entry.url) + '</span>' +
             '<span class="nav-path">' +
-              '<span class="hist-status hist-' + cls + '">' + (entry.status || 'ERR') + '</span> · ' +
+              '<span class="hist-status hist-' + cls + '">' + (entry.status || 'ERR') + '</span>' +
+              (entry.mock ? ' <span class="hist-status hist-other">MOCK</span>' : '') + ' · ' +
               esc(entry.ms) + ' ms · ' + esc(entry.at) +
             '</span>' +
           '</span>' +
@@ -1868,13 +1871,68 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       }).catch(function (err) {
         restoreSend();
         var ms = Math.round(performance.now() - started);
+        var mock = isNetworkError(err) ? mockResponseFor(current) : null;
+        if (mock) {
+          // The backend is unreachable (down, not deployed yet, or blocking
+          // CORS) — answer from the documented schema so the docs stay
+          // explorable, and say so loudly.
+          lastResponseText = mock.body === undefined ? '' : JSON.stringify(mock.body, null, 2);
+          metaEl.innerHTML =
+            '<span class="status status-ok">' + mock.status + ' ' + esc(mock.reason) + '</span>' +
+            '<span class="mock-badge" title="Generated from the OpenAPI document, not from a server">MOCK</span>' +
+            '<span class="meta-item">' + ms + ' ms</span>';
+          bodyEl.innerHTML =
+            '<div class="mock-note">' + unreachableMessage(req.url) + ' Showing a response generated from the documented schema.</div>' +
+            (mock.body === undefined ? '' : '<pre class="code resp-code">' + hljson(lastResponseText) + '</pre>');
+          byId('resp-headers').innerHTML = '<div class="kv-table kv-resp"><div class="kv-row"><span class="kv-key">x-scramble-mock</span><span class="kv-fixed">true</span></div></div>';
+          byId('copy-resp').hidden = mock.body === undefined;
+          byId('dl-resp').hidden = mock.body === undefined;
+          pushHistory({
+            opId: current.id, method: current.method, url: req.url,
+            status: mock.status, ms: ms, at: new Date().toLocaleTimeString(), mock: true,
+          });
+          return;
+        }
         metaEl.innerHTML = '<span class="status status-err">failed</span>';
-        bodyEl.innerHTML = '<pre class="code resp-code">' + esc(String(err)) + '</pre>';
+        bodyEl.innerHTML = '<pre class="code resp-code">' + esc(isNetworkError(err) ? unreachableMessage(req.url) : String(err)) + '</pre>';
         pushHistory({
           opId: current.id, method: current.method, url: req.url,
           status: 0, ms: ms, at: new Date().toLocaleTimeString(),
         });
       });
+    }
+
+    /** fetch() rejects with a TypeError for DNS/connection failures and CORS blocks alike. */
+    function isNetworkError(err) {
+      return err instanceof TypeError || /Failed to fetch|NetworkError|Load failed/i.test(String(err));
+    }
+
+    function unreachableMessage(url) {
+      var origin = url;
+      try { origin = new URL(url, location.href).origin; } catch (e) { /* keep as is */ }
+      return 'Could not reach ' + origin + ' — the API is not running there, or it blocks cross-origin requests (CORS).';
+    }
+
+    var REASONS = { 200: 'OK', 201: 'Created', 202: 'Accepted', 204: 'No Content' };
+
+    /** Success response for an operation, from its example or generated from its schema. */
+    function mockResponseFor(item) {
+      var responses = (item && item.op && item.op.responses) || {};
+      var codes = Object.keys(responses).filter(function (c) { return /^2\\d\\d$/.test(c); }).sort();
+      var code = codes[0] || (item.method === 'post' ? '201' : '200');
+      var status = Number(code);
+      var reason = REASONS[status] || (responses[code] && responses[code].description) || '';
+      if (status === 204) return { status: status, reason: reason, body: undefined };
+      var content = (responses[code] && responses[code].content) || {};
+      var media = content['application/json'] || content[Object.keys(content)[0]];
+      if (!media) return { status: status, reason: reason, body: {} };
+      if (media.example !== undefined) return { status: status, reason: reason, body: media.example };
+      if (media.examples) {
+        var first = media.examples[Object.keys(media.examples)[0]];
+        if (first && first.value !== undefined) return { status: status, reason: reason, body: first.value };
+      }
+      var generated = exampleOf(media.schema || {}, 0);
+      return { status: status, reason: reason, body: generated === null ? {} : generated };
     }
 
     byId('send-btn').addEventListener('click', send);
@@ -2129,7 +2187,9 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       loadSocketIo(url, function (io) {
         if (!io) {
           setWsStatus('error');
-          wsLog('sys', 'error', 'Could not load /socket.io/socket.io.js from this server. Raw WebSocket may work instead.');
+          var origin = url;
+          try { origin = new URL(url, location.href).origin; } catch (e) { /* keep */ }
+          wsLog('sys', 'error', 'Could not load the Socket.IO client from ' + origin + ' — is the API running there? If it uses plain WebSockets, switch the transport to Raw WebSocket.');
           return;
         }
         var socket = io(url, { transports: ['websocket', 'polling'] });
@@ -2276,8 +2336,11 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       return 'gql-' + (operation.kind + '-' + operation.name).replace(/[^a-zA-Z0-9]/g, '-');
     }
 
+    var gqlCurrent = null;
+
     function showGqlView(resolver, operation, navEl) {
       current = null;
+      gqlCurrent = operation;
       try { history.replaceState(null, '', '#' + gqlViewId(operation)); } catch (e) { /* ignore */ }
       byId('welcome').hidden = true;
       byId('request-view').hidden = true;
@@ -2366,7 +2429,24 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
         if (r.res.ok && pretty.indexOf('"errors"') === -1) captureToken(r.text);
         byId('gql-resp').scrollIntoView({ behavior: 'smooth', block: 'center' });
       }).catch(function (err) {
-        byId('gql-resp').innerHTML = '<div class="resp-empty">Request failed — ' + esc(String(err)) + '. Is a GraphQL endpoint mounted at this URL?</div>';
+        var ms = Date.now() - started;
+        var url = byId('gql-url').value;
+        if (isNetworkError(err) && gqlCurrent) {
+          // Same fallback as REST: the endpoint is unreachable, so answer from
+          // the documented return type and label it as a mock.
+          var data = {};
+          var generated = gqlCurrent.response ? exampleOf(gqlCurrent.response, 0) : null;
+          data[gqlCurrent.name] = generated === null ? {} : generated;
+          var pretty = JSON.stringify({ data: data }, null, 2);
+          byId('gql-meta').innerHTML = '<span class="status status-2xx">200</span>' +
+            '<span class="mock-badge" title="Generated from the documented return type, not from a server">MOCK</span> · ' + ms + ' ms';
+          byId('gql-resp').innerHTML =
+            '<div class="mock-note">' + unreachableMessage(url) + ' Showing a response generated from the documented return type.</div>' +
+            '<pre class="code">' + hljson(pretty) + '</pre>';
+          byId('gql-resp').scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+        byId('gql-resp').innerHTML = '<div class="resp-empty">Request failed — ' + esc(isNetworkError(err) ? unreachableMessage(url) : String(err)) + '</div>';
       }).then(function () {
         runBtn.disabled = false;
         runBtn.textContent = 'Run';
@@ -2650,6 +2730,17 @@ function buildCss(accent: string): string {
     [data-theme='dark'] .icon-sun { display: none; }
     [data-theme='light'] .icon-moon { display: none; }
     .btn-ghost.auth-on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+    /* ---- Mock fallback (backend unreachable) ---- */
+    .mock-badge {
+      display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+      font-size: 10px; font-weight: 800; letter-spacing: 0.6px;
+      background: #f6ad5522; color: #f6ad55; border: 1px solid #f6ad5566;
+    }
+    .mock-note {
+      margin: 0 0 10px; padding: 10px 12px; border-radius: 8px; font-size: 12.5px; line-height: 1.5;
+      background: #f6ad5514; color: var(--fg-2); border-left: 3px solid #f6ad55;
+    }
 
     /* ---- Toast ---- */
     .toast {
