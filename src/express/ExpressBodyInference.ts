@@ -152,7 +152,7 @@ export class ExpressBodyInference {
 
     if (def.kind === 'value') {
       const text = def.text.trim();
-      if (/^z\b|\bz\.object\s*\(/.test(text)) {
+      if (/(?:^z\b)|(?:\bz\.object\s*\()/.test(text)) {
         const shape = this.zodFromExpression(text, def.filePath);
         if (shape) return { ...shape, source: 'zod', name: def.name };
       }
@@ -160,7 +160,7 @@ export class ExpressBodyInference {
         const shape = this.joiFromExpression(text, def.filePath);
         if (shape) return { ...shape, source: 'joi', name: def.name };
       }
-      if (/^yup\b|\byup\.object\s*\(/.test(text)) {
+      if (/(?:^yup\b)|(?:\byup\.object\s*\()/.test(text)) {
         const shape = this.yupFromExpression(text, def.filePath);
         if (shape) return { ...shape, source: 'yup', name: def.name };
       }

@@ -227,7 +227,7 @@ export class ExpressResponseInference {
   /** Non-literal expression (`user.id`, `Date.now()`, `items.length`) → best-effort type. */
   private static schemaForExpression(key: string, expr: string): any {
     if (/\.length$|Date\.now\(\)|Number\(|parseInt\(|parseFloat\(|Math\./.test(expr)) return { type: 'number' };
-    if (/^!|Boolean\(|===|!==/.test(expr)) return { type: 'boolean' };
+    if (/(?:^!)|(?:Boolean\()|(?:===)|(?:!==)/.test(expr)) return { type: 'boolean' };
     if (/\.map\(|\.filter\(|Array\.from|\.slice\(/.test(expr)) return { type: 'array', items: {} };
     if (/new Date|toISOString\(\)/.test(expr)) return { type: 'string', format: 'date-time' };
     if (/\.\w+Id$|\.id$/.test(expr)) return { type: 'string' };

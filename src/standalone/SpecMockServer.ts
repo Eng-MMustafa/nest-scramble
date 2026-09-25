@@ -51,7 +51,7 @@ export class SpecMockServer {
     if (!match) return null;
 
     const responses = match.operation.responses || {};
-    const codes = Object.keys(responses).filter((c) => /^2\d\d$/.test(c)).sort();
+    const codes = Object.keys(responses).filter((c) => /^2\d\d$/.test(c)).sort((a, b) => a.localeCompare(b));
     const code = codes[0] || (verb === 'post' ? '201' : '200');
     const status = Number(code);
     const headers: Record<string, string> = { 'X-Scramble-Mock': 'true' };
@@ -136,7 +136,7 @@ export class SpecMockServer {
     if (/country/.test(lower)) return Fake.country();
     if (/url|website|link|avatar|image/.test(lower)) return Fake.url();
     if (/(^|_)id$|uuid|token|key$/.test(lower)) return this.uuid();
-    if (/date|created|updated|at$/.test(lower)) return Fake.recentDate().toISOString();
+    if (/(?:date)|(?:created)|(?:updated)|(?:at$)/.test(lower)) return Fake.recentDate().toISOString();
     if (/description|bio|content|body|message|note/.test(lower)) return Fake.sentences();
     if (/title|subject|summary/.test(lower)) return Fake.words(3);
     if (/status|state/.test(lower)) return 'active';
