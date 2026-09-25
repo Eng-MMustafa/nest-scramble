@@ -17,6 +17,10 @@
 
 <p align="center"><em>Log in → token captured automatically → protected request → live WebSocket ack → GraphQL query. Nothing above was annotated.</em></p>
 
+<p align="center">
+  <a href="https://eng-mmustafa.github.io/nest-scramble-demo/"><strong>▶ Open the live demo</strong></a> — generated from <a href="https://github.com/Eng-MMustafa/nest-scramble-demo">this NestJS app</a>, no decorators, no config.
+</p>
+
 ---
 
 ## Why Nest-Scramble?
