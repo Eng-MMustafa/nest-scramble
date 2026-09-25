@@ -190,13 +190,19 @@ Scenario files are plain JSON — chained requests, `{{variable}}` capture betwe
 Not using NestJS? `nest-scramble serve` scans Express route files and starts a docs server without touching your app code.
 
 ```bash
+# standalone docs server (no module import required)
 npx nest-scramble serve
+
+# with live "Try it" requests proxied to your running Express app
+npx nest-scramble serve --baseUrl http://localhost:4000
 ```
 
 - Auto-detects NestJS vs Express from `package.json`.
 - Serves the same polished docs UI at `http://localhost:3001/docs`.
 - Generates an OpenAPI spec at `/docs-json`.
-- Works with `app.get(...)`, `router.post(...)`, `app.use('/api', ...)` and `app.route(...)` patterns.
+- Resolves mounted routers (`app.use('/api', require('./routes/api'))`).
+- Reads JSDoc summaries, detects bearer-auth routes and file-upload routes.
+- Proxies "Try it" requests to your real backend with `--baseUrl`.
 
 For NestJS projects you still get the richer AST-based scan (DTOs, validations, WebSocket, GraphQL) by importing the module or running `serve`.
 

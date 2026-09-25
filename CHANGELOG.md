@@ -18,6 +18,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
   `app.use('/prefix', ...)` mounts and `app.route(...).get(...)` builders.
 - **`ExpressOpenApiTransformer`** — converts scanned Express routes into a valid
   OpenAPI 3.0 document consumable by the built-in docs UI.
+- **Serve proxy mode** — passing `--baseUrl` to `serve` proxies "Try it"
+  requests from the docs server to the live backend, so the interactive console
+  works without CORS setup.
+- **Richer Express scanning** — parses JSDoc summaries/descriptions, detects
+  bearer-auth routes through common middleware names, recognises `multer` file
+  uploads and captures common response status codes (201, 204, 400, 401, 404).
 - **Auto-detecting `init`** — `npx nest-scramble init` no longer requires
   `--module`; it looks for `src/app.module.ts`, `src/app.module.js`,
   `app.module.ts` and `app.module.js` automatically.
