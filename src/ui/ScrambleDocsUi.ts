@@ -2005,11 +2005,13 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       }
     }
 
-    function loadSocketIo(callback) {
+    function loadSocketIo(backendUrl, callback) {
       if (window.io) return callback(window.io);
-      // Served by the user's own Socket.IO server — no CDN involved.
+      // Load the Socket.IO client from the backend URL so cross-origin docs
+      // servers can still connect without a local Socket.IO server.
       var script = document.createElement('script');
-      script.src = '/socket.io/socket.io.js';
+      var origin = backendUrl.indexOf('http') === 0 ? backendUrl.replace(/\/+$/, '') : location.origin;
+      script.src = origin + '/socket.io/socket.io.js';
       script.onload = function () { callback(window.io || null); };
       script.onerror = function () { callback(null); };
       document.head.appendChild(script);
@@ -2052,7 +2054,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
         return;
       }
 
-      loadSocketIo(function (io) {
+      loadSocketIo(url, function (io) {
         if (!io) {
           setWsStatus('error');
           wsLog('sys', 'error', 'Could not load /socket.io/socket.io.js from this server. Raw WebSocket may work instead.');

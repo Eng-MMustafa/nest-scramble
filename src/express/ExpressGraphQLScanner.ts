@@ -2,12 +2,19 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+export interface ExpressGraphQLArg {
+  name: string;
+  required: boolean;
+  schema: any;
+  graphqlType: string;
+}
+
 export interface ExpressGraphQLOperation {
   name: string;
   kind: 'query' | 'mutation';
   summary: string;
   sample: string;
-  args?: any[];
+  args?: ExpressGraphQLArg[];
   response?: any;
   description?: string;
 }
@@ -102,28 +109,69 @@ export class ExpressGraphQLScanner {
       const body = match[2];
 
       // Extract field definitions: fieldName(args): ReturnType
-      const fieldPattern = /(\w+)\s*(?:\([^)]*\))?\s*:\s*([\w\[\]!]+)/g;
+      const fieldPattern = /(\w+)\s*(?:\(([^)]*)\))?\s*:\s*([\w\[\]!]+)/g;
       let fieldMatch: RegExpExecArray | null;
       while ((fieldMatch = fieldPattern.exec(body)) !== null) {
         const name = fieldMatch[1];
-        const returnType = fieldMatch[2].trim();
+        const argsString = fieldMatch[2] || '';
+        const returnType = fieldMatch[3].trim();
         const baseType = this.unwrapGraphQLType(returnType);
         const subfields = typeFields[baseType] || [];
         const selection = subfields.length
           ? ` { ${subfields.slice(0, 5).join(' ')} }`
           : '';
 
+        const args = this.parseArgs(argsString, typeFields);
+        const varDefs = args.length
+          ? `(${args.map((a) => `$${a.name}: ${a.graphqlType}`).join(', ')})`
+          : '';
+        const argInline = args.length
+          ? `(${args.map((a) => `${a.name}: $${a.name}`).join(', ')})`
+          : '';
+        const sample = args.length
+          ? `${kind} ${name}${varDefs} { ${name}${argInline}${selection} }`
+          : `${kind} { ${name}${selection} }`;
+
         operations.push({
           name,
           kind,
           summary: `${kind === 'query' ? 'Query' : 'Mutation'} ${name}`,
-          sample: `${kind} { ${name}${selection} }`,
+          sample,
+          args,
           response: { type: this.graphqlTypeToJsonType(returnType), properties: Object.fromEntries(subfields.map((f) => [f, {}])) },
         });
       }
     }
 
     return operations;
+  }
+
+  private static parseArgs(argsString: string, typeFields: Record<string, string[]>): ExpressGraphQLArg[] {
+    if (!argsString.trim()) return [];
+
+    const args: ExpressGraphQLArg[] = [];
+    const parts = argsString.split(',').map((s) => s.trim()).filter(Boolean);
+    for (const part of parts) {
+      const m = /(\w+)\s*:\s*([\w\[\]!]+)/.exec(part);
+      if (!m) continue;
+      const name = m[1];
+      const graphqlType = m[2];
+      const required = graphqlType.endsWith('!');
+      const baseType = this.unwrapGraphQLType(graphqlType);
+      const isInput = Object.prototype.hasOwnProperty.call(typeFields, baseType);
+      const schema = isInput
+        ? { type: 'object', properties: Object.fromEntries((typeFields[baseType] || []).map((f) => [f, { type: 'string' }])) }
+        : { type: this.graphqlTypeToJsonType(graphqlType) };
+
+      args.push({
+        name,
+        required,
+        schema,
+        graphqlType,
+      });
+    }
+
+    return args;
   }
 
   private static extractTypeFields(sdl: string): Record<string, string[]> {

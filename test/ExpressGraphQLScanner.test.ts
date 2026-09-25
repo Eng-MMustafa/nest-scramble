@@ -43,8 +43,13 @@ describe('ExpressGraphQLScanner', () => {
     const ops = resolvers[0].operations.map((op) => `${op.kind} ${op.name}: ${op.sample}`);
     expect(ops).toEqual([
       'query posts: query { posts { id title content } }',
-      'query post: query { post { id title content } }',
-      'mutation createPost: mutation { createPost { id title content } }',
+      'query post: query post($id: ID!) { post(id: $id) { id title content } }',
+      'mutation createPost: mutation createPost($title: String!) { createPost(title: $title) { id title content } }',
+    ]);
+
+    const createPost = resolvers[0].operations.find((op) => op.name === 'createPost');
+    expect(createPost!.args).toEqual([
+      { name: 'title', required: true, graphqlType: 'String!', schema: { type: 'string' } },
     ]);
   });
 });
