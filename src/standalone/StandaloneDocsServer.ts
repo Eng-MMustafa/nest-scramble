@@ -1,6 +1,5 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
 import * as http from 'http';
-import * as fs from 'fs';
 import * as path from 'path';
 import { renderDocsPage } from '../utils/DocsPageRenderer';
 import { ScrambleLogger } from '../utils/ScrambleLogger';
@@ -84,15 +83,6 @@ export class StandaloneDocsServer {
 
     const port = options.port || Number(process.env.PORT) || 3001;
     const docsPath = 'docs';
-    const docsUrl = `http://localhost:${port}`;
-    const proxyTarget = options.baseUrl ? this.parseBaseUrl(options.baseUrl) : null;
-
-    // When a proxy target is supplied, point the spec at the docs server so
-    // "Try it" requests hit us and are forwarded to the real API. This avoids
-    // cross-origin issues and makes standalone docs work with one command.
-    if (proxyTarget && spec.servers?.[0]) {
-      spec.servers[0].url = docsUrl;
-    }
 
     const html = renderDocsPage({
       specUrl: `./${docsPath}-json`,
@@ -117,8 +107,6 @@ export class StandaloneDocsServer {
       } else if (url === `/${docsPath}-graphql-json`) {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify(graphqlDocument, null, 2));
-      } else if (proxyTarget) {
-        this.proxyRequest(req, res, proxyTarget);
       } else {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('Not found. Visit /docs');
@@ -155,45 +143,5 @@ export class StandaloneDocsServer {
     } catch {
       // Ignore browser-open failures.
     }
-  }
-
-  private parseBaseUrl(raw: string): { protocol: string; hostname: string; port: number; path: string } {
-    const url = new URL(raw);
-    return {
-      protocol: url.protocol,
-      hostname: url.hostname,
-      port: url.port ? Number(url.port) : (url.protocol === 'https:' ? 443 : 80),
-      path: url.pathname,
-    };
-  }
-
-  private proxyRequest(
-    req: http.IncomingMessage,
-    res: http.ServerResponse,
-    target: { protocol: string; hostname: string; port: number; path: string },
-  ): void {
-    const options: http.RequestOptions = {
-      hostname: target.hostname,
-      port: target.port,
-      path: req.url,
-      method: req.method,
-      headers: { ...req.headers, host: target.hostname },
-    };
-
-    const protocol = target.protocol === 'https:' ? require('https') : http;
-    const proxyReq = protocol.request(options, (proxyRes: http.IncomingMessage) => {
-      res.writeHead(proxyRes.statusCode || 500, proxyRes.headers);
-      proxyRes.pipe(res, { end: true });
-    });
-
-    proxyReq.on('error', (error: Error) => {
-      ScrambleLogger.error(`Proxy error: ${error.message}`);
-      if (!res.headersSent) {
-        res.writeHead(502, { 'Content-Type': 'text/plain' });
-        res.end(`Could not reach API at ${target.protocol}//${target.hostname}:${target.port}`);
-      }
-    });
-
-    req.pipe(proxyReq, { end: true });
   }
 }

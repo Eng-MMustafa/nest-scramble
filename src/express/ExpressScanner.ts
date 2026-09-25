@@ -356,7 +356,12 @@ export class ExpressScanner {
       .split(',')
       .map((f) => f.trim())
       .filter((f) => f.length > 0)
-      .map((f) => f.split(':')[0].trim()); // handle aliases: name: fullName
+      .map((f) => {
+        // Handle aliases (name: fullName) and default values (name = 'Ali').
+        let base = f.split(':')[0].trim();
+        base = base.split('=')[0].trim();
+        return base;
+      });
 
     const required: string[] = [];
     const properties: Record<string, any> = {};

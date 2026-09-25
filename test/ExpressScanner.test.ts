@@ -99,6 +99,23 @@ describe('ExpressScanner', () => {
     expect(route.bodySchema!.required).toEqual(['name', 'email']);
     expect(route.consumes).toEqual(['application/json']);
   });
+
+  it('ignores default values when inferring body fields', () => {
+    const root = makeProject({
+      'src/routes/products.js': `
+        app.post('/products', (req, res) => {
+          const { name, price, status = 'active' } = req.body;
+          if (!name || price == null) return res.status(400).json({ message: 'required' });
+          res.status(201).json({ id: 1, name, price, status });
+        });
+      `,
+    });
+    roots.push(root);
+
+    const controllers = ExpressScanner.scan(path.join(root, 'src'));
+    const route = controllers[0].routes[0];
+    expect(Object.keys(route.bodySchema!.properties)).toEqual(['name', 'price', 'status']);
+  });
 });
 
 describe('ExpressOpenApiTransformer', () => {

@@ -93,6 +93,7 @@ export class ExpressGraphQLScanner {
 
   private static parseOperations(sdl: string): ExpressGraphQLOperation[] {
     const operations: ExpressGraphQLOperation[] = [];
+    const typeFields = this.extractTypeFields(sdl);
 
     const typePattern = /type\s+(Query|Mutation)\s*\{([^}]*)\}/g;
     let match: RegExpExecArray | null;
@@ -101,22 +102,54 @@ export class ExpressGraphQLScanner {
       const body = match[2];
 
       // Extract field definitions: fieldName(args): ReturnType
-      const fieldPattern = /(\w+)\s*(?:\([^)]*\))?\s*:\s*([^\n]+)/g;
+      const fieldPattern = /(\w+)\s*(?:\([^)]*\))?\s*:\s*([\w\[\]!]+)/g;
       let fieldMatch: RegExpExecArray | null;
       while ((fieldMatch = fieldPattern.exec(body)) !== null) {
         const name = fieldMatch[1];
         const returnType = fieldMatch[2].trim();
+        const baseType = this.unwrapGraphQLType(returnType);
+        const subfields = typeFields[baseType] || [];
+        const selection = subfields.length
+          ? ` { ${subfields.slice(0, 5).join(' ')} }`
+          : '';
+
         operations.push({
           name,
           kind,
           summary: `${kind === 'query' ? 'Query' : 'Mutation'} ${name}`,
-          sample: `${kind} { ${name} }`,
-          response: { type: this.graphqlTypeToJsonType(returnType) },
+          sample: `${kind} { ${name}${selection} }`,
+          response: { type: this.graphqlTypeToJsonType(returnType), properties: Object.fromEntries(subfields.map((f) => [f, {}])) },
         });
       }
     }
 
     return operations;
+  }
+
+  private static extractTypeFields(sdl: string): Record<string, string[]> {
+    const fields: Record<string, string[]> = {};
+    const typePattern = /type\s+(\w+)\s*\{([^}]*)\}/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = typePattern.exec(sdl)) !== null) {
+      const typeName = match[1];
+      const body = match[2];
+      const fieldPattern = /(\w+)\s*(?:\([^)]*\))?\s*:\s*([\w\[\]!]+)/g;
+      let fieldMatch: RegExpExecArray | null;
+      const typeFields: string[] = [];
+      while ((fieldMatch = fieldPattern.exec(body)) !== null) {
+        typeFields.push(fieldMatch[1]);
+      }
+      if (typeFields.length) {
+        fields[typeName] = typeFields;
+      }
+    }
+
+    return fields;
+  }
+
+  private static unwrapGraphQLType(graphqlType: string): string {
+    return graphqlType.replace(/^[\[!]+/, '').replace(/[\]!]+$/, '');
   }
 
   private static graphqlTypeToJsonType(graphqlType: string): string {
