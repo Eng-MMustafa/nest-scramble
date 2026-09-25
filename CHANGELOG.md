@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
-## [5.8.0] - Unreleased
+## [5.8.0] - 2026-09-25
 
 ### Added
 - **Real request bodies for Express** — the scanner now reads the validation
