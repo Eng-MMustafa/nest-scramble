@@ -3,7 +3,11 @@ import * as fs from 'fs';
 import * as http from 'http';
 import * as https from 'https';
 import * as path from 'path';
+import { URL } from 'url';
 import { exec } from 'child_process';
+
+/** `Error` with the `code` Node attaches to system errors (EADDRINUSE, ECONNREFUSED…). */
+type SystemError = Error & { code?: string };
 import { AppPortDetector } from '../utils/AppPortDetector';
 import { SpecMockServer } from './SpecMockServer';
 import { renderDocsPage } from '../utils/DocsPageRenderer';
@@ -201,7 +205,7 @@ export class StandaloneDocsServer {
    */
   private listenWithFallback(port: number, allowFallback: boolean, attempt = 0): Promise<number> {
     return new Promise((resolve, reject) => {
-      const onError = (err: NodeJS.ErrnoException) => {
+      const onError = (err: SystemError) => {
         this.server!.off('error', onError);
         if (err.code === 'EADDRINUSE' && allowFallback && attempt < 20) {
           ScrambleLogger.warn(`Port ${port} is in use — trying ${port + 1}`);
@@ -242,7 +246,7 @@ export class StandaloneDocsServer {
     const client = target.protocol === 'https:' ? https : http;
     const upstream = client.request(
       { protocol: target.protocol, hostname: target.hostname, port: target.port || undefined, path: target.pathname + target.search, method: req.method, headers },
-      (response) => {
+      (response: http.IncomingMessage) => {
         const outgoing: http.OutgoingHttpHeaders = { ...response.headers };
         delete outgoing['connection'];
         delete outgoing['transfer-encoding'];
@@ -253,7 +257,7 @@ export class StandaloneDocsServer {
         response.pipe(res);
       },
     );
-    upstream.on('error', (err: NodeJS.ErrnoException) => {
+    upstream.on('error', (err: SystemError) => {
       res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({
         statusCode: 502,
