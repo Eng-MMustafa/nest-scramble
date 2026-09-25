@@ -15,6 +15,10 @@ export class MockGenerator {
       return Array.from({ length: count }, () => this.generateMock({ ...analyzedType, isArray: false }));
     }
 
+    if (analyzedType.enumValues && analyzedType.enumValues.length > 0) {
+      return Fake.arrayElement(analyzedType.enumValues);
+    }
+
     if (analyzedType.unionTypes) {
       // Pick a random union type
       const randomType = Fake.arrayElement(analyzedType.unionTypes);
@@ -26,7 +30,7 @@ export class MockGenerator {
       const obj: any = {};
       for (const prop of analyzedType.properties) {
         if (!prop.type.isOptional || Fake.boolean()) {
-          obj[prop.name] = this.generateMock(prop.type);
+          obj[prop.name] = this.generateMockForProperty(prop);
         }
       }
       return obj;
@@ -72,89 +76,52 @@ export class MockGenerator {
    */
   static generateMockForProperty(property: PropertyInfo): any {
     const name = property.name.toLowerCase();
+    const type = property.type;
 
-    if (property.type.isArray) {
+    if (type.isArray) {
       const count = Fake.int(1, 5);
-      return Array.from({ length: count }, () => this.generateMockForPropertyName(name, { ...property.type, isArray: false }));
+      const itemProperty: PropertyInfo = { ...property, type: { ...type, isArray: false } };
+      return Array.from({ length: count }, () => this.generateMockForProperty(itemProperty));
     }
 
-    if (property.type.properties) {
-      const obj: any = {};
-      for (const prop of property.type.properties) {
-        if (!prop.type.isOptional || Fake.boolean()) {
-          obj[prop.name] = this.generateMockForProperty(prop);
-        }
-      }
-      return obj;
+    // Structured types (nested DTOs, enums, unions) are shaped by their type,
+    // not by the property name — defer to the structure-aware generator.
+    if (type.properties || type.enumValues || type.unionTypes) {
+      return this.generateMock(type);
     }
 
-    return this.generateMockForPropertyName(name, property.type);
+    const hinted = this.generateMockForPropertyName(name, type);
+    return hinted !== undefined ? hinted : this.generateMock(type);
   }
 
+  /**
+   * Name-based hints for scalar properties. Returns `undefined` when no hint
+   * applies so the caller can fall back to type-based generation.
+   */
   private static generateMockForPropertyName(name: string, type: AnalyzedType): any {
     const typeStr = type.type.toLowerCase();
+    const isString = typeStr.includes('string');
+    const isNumber = typeStr.includes('number') || typeStr.includes('int') || typeStr.includes('float');
 
-    // Email
-    if (name.includes('email')) {
-      return Fake.email();
+    if (isNumber) {
+      if (name.includes('age')) return Fake.int(18, 80);
+      if (name.includes('id')) return Fake.int(1, 1000);
+      return undefined;
     }
 
-    // Name
-    if (name.includes('name') || name.includes('firstname') || name.includes('lastname')) {
-      return Fake.fullName();
-    }
+    if (!isString) return undefined;
 
-    // Phone
-    if (name.includes('phone') || name.includes('mobile') || name.includes('tel')) {
-      return Fake.phone();
-    }
+    if (name.includes('email')) return Fake.email();
+    if (name.includes('phone') || name.includes('mobile') || name.includes('tel')) return Fake.phone();
+    if (name.includes('address') || name.includes('street')) return Fake.streetAddress();
+    if (name.includes('city')) return Fake.city();
+    if (name.includes('country')) return Fake.country();
+    if (name.includes('url') || name.includes('website')) return Fake.url();
+    if (name.includes('date') || name.includes('created') || name.includes('updated')) return Fake.recentDate().toISOString();
+    if (name.includes('description') || name.includes('bio')) return Fake.sentences();
+    if (name.includes('title')) return Fake.words(3);
+    if (name.includes('name')) return Fake.fullName();
 
-    // Address
-    if (name.includes('address') || name.includes('street')) {
-      return Fake.streetAddress();
-    }
-
-    // City
-    if (name.includes('city')) {
-      return Fake.city();
-    }
-
-    // Country
-    if (name.includes('country')) {
-      return Fake.country();
-    }
-
-    // URL
-    if (name.includes('url') || name.includes('website')) {
-      return Fake.url();
-    }
-
-    // ID
-    if (name.includes('id') && typeStr.includes('number')) {
-      return Fake.int(1, 1000);
-    }
-
-    // Age
-    if (name.includes('age') && typeStr.includes('number')) {
-      return Fake.int(18, 80);
-    }
-
-    // Date
-    if (name.includes('date') || name.includes('created') || name.includes('updated')) {
-      return Fake.recentDate().toISOString();
-    }
-
-    // Description
-    if (name.includes('description') || name.includes('bio')) {
-      return Fake.sentences();
-    }
-
-    // Title
-    if (name.includes('title')) {
-      return Fake.words(3);
-    }
-
-    // Fallback to type-based generation
-    return this.generateMockForType(type.type);
+    return undefined;
   }
 }

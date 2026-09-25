@@ -193,7 +193,7 @@ Not using NestJS? `nest-scramble serve` scans Express route files and starts a d
 # standalone docs server (no module import required)
 npx nest-scramble serve
 
-# with live "Try it" requests proxied to your running Express app
+# point live "Try it" / WebSocket / GraphQL requests at your running Express app (enable CORS)
 npx nest-scramble serve --baseUrl http://localhost:4000
 ```
 
@@ -341,8 +341,9 @@ Every CLI feature is exported as a typed function — build your own tooling on 
 
 ---
 
-## What's New in v5.6.0
+## What's New in v5.6.x
 
+- **5.6.1** — GraphQL `input` types expand into pre-filled mutation variables, fixed the variables placeholder, cleaner inline console script, and npm metadata that finally says Express/Fastify/WebSocket/GraphQL out loud.
 - **`npx nest-scramble serve`** — one-command standalone docs server for NestJS or Express projects. No module import needed.
 - **Express route scanning** — auto-detect Express apps and document `app/router` method routes, `app.use()` mounts and `app.route()` builders.
 - **Auto-detecting `init`** — `npx nest-scramble init` now finds `src/app.module.ts` automatically even when `--module` is omitted.

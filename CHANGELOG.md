@@ -6,6 +6,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [5.6.1] - 2026-09-25
+
+### Fixed
+- **Mock server ignored property names** — `MockGenerator.generateMock` recursed
+  without the property name, so `email`, `phone`, `city`… fields came back as
+  random words. Name hints now apply to scalar strings, numeric `id`/`age` get
+  sensible ranges, enums pick a declared value, and nested DTOs/unions are still
+  generated structurally.
+- **GraphQL variables placeholder** — the variables editor placeholder rendered
+  as a broken HTML attribute (`{ ` only); it now shows `{ "key": "value" }`.
+- **Express GraphQL `input` types** — argument types declared with `input` are
+  now expanded into their fields so mutation variables are pre-filled correctly.
+- **Docs UI regex escaping** — the inline console script no longer contains
+  unescaped regex literals that broke parsing when served standalone.
+- **Sonar/ESLint cleanup** — `Fake` now uses `crypto.randomInt`, alphabetical
+  sorts use `localeCompare`, and unnecessary regex escapes were removed. No
+  behavioural change for users.
+
+### Changed
+- **npm metadata** — package description and keywords now reflect Express,
+  Fastify, WebSocket, GraphQL and mock-server support for better discoverability.
+- **CI** — dependencies are installed with `--ignore-scripts`.
+
+---
+
 ## [5.6.0] - 2026-09-25
 
 ### Added

@@ -110,6 +110,72 @@ describe('MockGenerator', () => {
     });
   });
 
+  // ── Enums ─────────────────────────────────────────────────────────────────
+
+  describe('generateMock — enums', () => {
+    it('picks one of the declared enum values', () => {
+      const type: AnalyzedType = {
+        type: 'ProductStatus',
+        isArray: false,
+        isOptional: false,
+        enumValues: ['active', 'inactive', 'out_of_stock'],
+      };
+      for (let i = 0; i < 10; i++) {
+        expect(type.enumValues).toContain(MockGenerator.generateMock(type));
+      }
+    });
+  });
+
+  // ── Name hints flow through generateMock (mock server path) ───────────────
+
+  describe('generateMock — property names drive scalar hints', () => {
+    const dto = objectType([
+      { name: 'id', type: simpleType('number') },
+      { name: 'email', type: simpleType('string') },
+      { name: 'emailVerified', type: simpleType('boolean') },
+      { name: 'age', type: simpleType('number') },
+      { name: 'status', type: { ...simpleType('Status'), enumValues: ['on', 'off'] } },
+      {
+        name: 'addresses',
+        type: {
+          type: 'AddressDto',
+          isArray: true,
+          isOptional: false,
+          properties: [
+            { name: 'street', type: simpleType('string') },
+            { name: 'city', type: simpleType('string') },
+          ],
+        },
+      },
+    ]);
+
+    it('uses the email hint for nested "email" properties', () => {
+      expect(MockGenerator.generateMock(dto).email).toMatch(/@/);
+    });
+
+    it('keeps non-string types intact even when the name matches a string hint', () => {
+      expect(typeof MockGenerator.generateMock(dto).emailVerified).toBe('boolean');
+    });
+
+    it('constrains numeric hints to sensible ranges', () => {
+      const result = MockGenerator.generateMock(dto);
+      expect(result.age).toBeGreaterThanOrEqual(18);
+      expect(result.age).toBeLessThanOrEqual(80);
+      expect(result.id).toBeGreaterThanOrEqual(1);
+    });
+
+    it('resolves enums and nested DTO arrays structurally, not by name', () => {
+      const result = MockGenerator.generateMock(dto);
+      expect(['on', 'off']).toContain(result.status);
+      expect(Array.isArray(result.addresses)).toBe(true);
+      for (const address of result.addresses) {
+        expect(typeof address).toBe('object');
+        expect(typeof address.street).toBe('string');
+        expect(typeof address.city).toBe('string');
+      }
+    });
+  });
+
   // ── Property-aware mocking ────────────────────────────────────────────────
 
   describe('generateMockForProperty — smart field names', () => {
