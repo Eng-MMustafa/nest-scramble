@@ -18,9 +18,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
   `app.use('/prefix', ...)` mounts and `app.route(...).get(...)` builders.
 - **`ExpressOpenApiTransformer`** — converts scanned Express routes into a valid
   OpenAPI 3.0 document consumable by the built-in docs UI.
-- **Serve proxy mode** — passing `--baseUrl` to `serve` proxies "Try it"
-  requests from the docs server to the live backend, so the interactive console
-  works without CORS setup.
+- **`serve` backend URL** — passing `--baseUrl` to `serve` points the docs UI
+  at the live backend for "Try it" requests. Enable CORS on the backend for the
+  best experience.
 - **Richer Express scanning** — parses JSDoc summaries/descriptions, detects
   bearer-auth routes through common middleware names, recognises `multer` file
   uploads, captures common response status codes and infers JSON request body

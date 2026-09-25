@@ -204,7 +204,8 @@ npx nest-scramble serve --baseUrl http://localhost:4000
 - Reads JSDoc summaries, detects bearer-auth routes and file-upload routes.
 - Infers request body schemas from `const { ... } = req.body` destructuring.
 - Discovers Socket.IO events and GraphQL `Query`/`Mutation` operations.
-- Proxies "Try it" requests to your real backend with `--baseUrl`.
+- Points "Try it" requests at your backend with `--baseUrl` (enable CORS for the
+  best experience).
 
 For NestJS projects you still get the richer AST-based scan (DTOs, validations, WebSocket, GraphQL) by importing the module or running `serve`.
 
