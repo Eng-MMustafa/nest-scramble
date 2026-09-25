@@ -1524,7 +1524,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       var specBase = spec && spec.servers && spec.servers[0] && spec.servers[0].url;
       var base = (env && env.baseUrl) || specBase || location.origin;
       if (base && url.indexOf('http') !== 0) {
-        url = base.replace(/\/+$/, '') + url;
+        url = base.replace(/\\/+$/, '') + url;
       }
       Object.keys(headers).forEach(function (key) { headers[key] = applyVars(headers[key]); });
       if (body && typeof body === 'string') body = applyVars(body);
@@ -2210,7 +2210,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
 
       var base = (env && env.baseUrl) || specBase || location.origin;
 
-      byId('gql-url').value = base.replace(/\/+$/, '') + '/graphql';
+      byId('gql-url').value = base.replace(/\\/+$/, '') + '/graphql';
 
       byId('gql-summary').textContent = operation.summary || '';
       byId('gql-query').value = operation.sample || '';
