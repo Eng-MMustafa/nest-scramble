@@ -61,6 +61,7 @@ const doctorCommand: CommandDef = {
   options: [
     { key: 'json', long: '--json', boolean: true, description: 'Output the report as JSON' },
     { key: 'minScore', long: '--min-score', short: '-s', placeholder: '<n>', default: '', description: 'Exit with code 1 when the score is below this threshold (for CI)' },
+    { key: 'globalPrefix', long: '--globalPrefix', short: '-p', placeholder: '<prefix>', default: '', description: 'Reserved for CI parity; currently has no effect on the health score' },
   ],
 };
 
@@ -122,13 +123,13 @@ async function runGenerate(sourcePath: string, options: {
 
       if (options.format === 'postman') {
         console.log('📦 Generating Postman collection...');
-        const generator = new PostmanCollectionGenerator(options.baseUrl);
+        const generator = new PostmanCollectionGenerator(options.baseUrl, options.globalPrefix);
         const collection = generator.generateCollection(controllers);
         fs.writeFileSync(outputPath, JSON.stringify(collection, null, 2));
         console.log(`✅ Postman collection saved to: ${outputPath}`);
       } else if (options.format === 'client') {
         console.log('🔷 Generating typed TypeScript client...');
-        const clientGenerator = new TypedClientGenerator(options.baseUrl);
+        const clientGenerator = new TypedClientGenerator(options.baseUrl, options.globalPrefix);
         const clientCode = clientGenerator.generate(controllers, packageJson.version);
         const clientOutput = options.output === 'openapi.json' ? 'api-client.ts' : outputPath;
         fs.writeFileSync(clientOutput, clientCode);
@@ -232,18 +233,20 @@ async function runInit(options: { module: string }): Promise<void> {
       const configEnd = configObject.getEnd();
       const configText = originalText.slice(configStart, configEnd);
 
+      const defaultImport = "NestScrambleModule.forRoot({ path: '/docs', sourcePath: 'src' })";
+
       let newConfigText: string;
       if (configText.includes('imports:')) {
         // Add to existing imports array
         newConfigText = configText.replace(
           /imports:\s*\[/,
-          'imports: [\n    NestScrambleModule.forRoot(),'
+          `imports: [\n    ${defaultImport},`
         );
       } else {
         // Create imports array
         newConfigText = configText.replace(
           /\{/,
-          '{\n  imports: [NestScrambleModule.forRoot()],'
+          `{\n  imports: [${defaultImport}],`
         );
       }
 

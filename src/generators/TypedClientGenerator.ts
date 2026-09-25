@@ -23,7 +23,10 @@ function packageVersion(): string {
  * with your controllers by re-running the CLI.
  */
 export class TypedClientGenerator {
-  constructor(private readonly baseUrl: string = 'http://localhost:3000') {}
+  constructor(
+    private readonly baseUrl: string = 'http://localhost:3000',
+    private readonly globalPrefix: string = '',
+  ) {}
 
   generate(controllers: ControllerInfo[], version = packageVersion()): string {
     const lines: string[] = [];
@@ -121,7 +124,7 @@ export class TypedClientGenerator {
 
     const returnTs = this.toTsType(method.returnType);
     const fnParams = this.buildFnParams(pathParams, queryParams, bodyParam, fileFields);
-    const fullRoute = this.joinPath(controllerPath, method.route);
+    const fullRoute = this.joinPath(this.globalPrefix, controllerPath, method.route);
 
     lines.push(`async ${method.name}(${fnParams}): Promise<${returnTs}> {`);
 

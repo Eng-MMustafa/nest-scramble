@@ -416,4 +416,15 @@ describe('TypedClientGenerator', () => {
       expect(out).not.toContain('export class ApiClient');
     });
   });
+
+  describe('global prefix', () => {
+    it('prepends the global prefix to generated URLs', () => {
+      const prefixed = new TypedClientGenerator('http://localhost:3000', 'api');
+      const controller = makeController({
+        methods: [{ name: 'findAll', httpMethod: 'GET', route: '', parameters: [], returnType: stringType }],
+      });
+      const out = prefixed.generate([controller]);
+      expect(out).toContain("fetch(`${this.baseUrl}/api/users`)");
+    });
+  });
 });

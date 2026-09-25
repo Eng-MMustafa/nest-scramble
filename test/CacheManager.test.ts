@@ -12,6 +12,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { CacheManager, CachedController } from '../src/cache/CacheManager';
 import { ControllerInfo } from '../src/scanner/ScannerService';
+import { ScrambleLogger } from '../src/utils/ScrambleLogger';
 
 const LIBRARY_VERSION: string = require('../package.json').version;
 
@@ -36,15 +37,16 @@ const entry = (filePath: string, names: string[]): CachedController => ({
 
 describe('CacheManager', () => {
   let cacheFile: string;
+  let previousLogLevel: ReturnType<typeof ScrambleLogger.getLevel>;
 
   beforeEach(() => {
     cacheFile = tempCacheFile();
-    jest.spyOn(console, 'log').mockImplementation(() => undefined);
-    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    previousLogLevel = ScrambleLogger.getLevel();
+    ScrambleLogger.configure('silent');
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    ScrambleLogger.configure(previousLogLevel);
     fs.rmSync(path.dirname(cacheFile), { recursive: true, force: true });
   });
 
@@ -119,6 +121,7 @@ describe('CacheManager', () => {
       const manager = new CacheManager({ cacheFilePath: cacheFile });
       expect(() => manager.load()).not.toThrow();
       expect(manager.load()).toBe(false);
+      expect(fs.existsSync(cacheFile)).toBe(false);
     });
 
     it('removes an entry', () => {

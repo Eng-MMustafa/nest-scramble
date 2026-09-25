@@ -62,6 +62,7 @@ export class OpenApiTransformer {
     this.schemas = {};
     this.assignedSchemaNames.clear();
     const paths: Record<string, Record<string, any>> = {};
+    let anyAuthRequired = false;
     const tags = controllers.map(controller => ({
       name: this.getControllerTagName(controller),
       description: controller.path ? `Routes under /${controller.path}` : 'Routes without a controller base path',
@@ -74,6 +75,10 @@ export class OpenApiTransformer {
         const requiresAuth = this.requiresAuthentication(method, controller);
         const guardTypes = this.getEffectiveGuardTypes(method, controller);
         const operation = this.createOperation(method, controller, requiresAuth, guardTypes);
+
+        if (requiresAuth) {
+          anyAuthRequired = true;
+        }
 
         if (!paths[fullPath]) {
           paths[fullPath] = {};
@@ -94,6 +99,27 @@ export class OpenApiTransformer {
       }
     }
 
+    const components: OpenApiSpec['components'] = {
+      schemas: this.schemas,
+    };
+
+    if (anyAuthRequired) {
+      components.securitySchemes = {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Enter your Bearer token in the format: Bearer <token>',
+        },
+        apiKey: {
+          type: 'apiKey',
+          in: 'header',
+          name: 'X-API-Key',
+          description: 'API Key for authentication',
+        },
+      };
+    }
+
     return {
       openapi: '3.0.0',
       info: {
@@ -103,28 +129,12 @@ export class OpenApiTransformer {
       },
       servers: [
         {
-          url: baseUrl,
+          url: baseUrl || this.baseUrl,
         },
       ],
       tags,
       paths,
-      components: {
-        schemas: this.schemas,
-        securitySchemes: {
-          bearerAuth: {
-            type: 'http',
-            scheme: 'bearer',
-            bearerFormat: 'JWT',
-            description: 'Enter your Bearer token in the format: Bearer <token>',
-          },
-          apiKey: {
-            type: 'apiKey',
-            in: 'header',
-            name: 'X-API-Key',
-            description: 'API Key for authentication',
-          },
-        },
-      },
+      components,
     };
   }
 
@@ -351,7 +361,7 @@ export class OpenApiTransformer {
       operation.deprecated = true;
     }
 
-    operation['x-code-samples'] = this.generateCodeSamples(method);
+    operation['x-code-samples'] = this.generateCodeSamples(controller, method);
 
     return operation;
   }
@@ -507,6 +517,14 @@ export class OpenApiTransformer {
       };
     }
 
+    if (type.format) {
+      return {
+        type: type.type,
+        format: type.format,
+        example: type.format === 'date-time' ? '2024-01-01T00:00:00.000Z' : 'sample',
+      };
+    }
+
     if (type.properties) {
       const schema = this.buildObjectSchema(type);
 
@@ -618,8 +636,8 @@ export class OpenApiTransformer {
    * route. Copying either one produced a request that could not work, so the
    * shape now follows what the endpoint actually accepts.
    */
-  private generateCodeSamples(method: MethodInfo): any[] {
-    const fullPath = this.buildPath('', method.route);
+  private generateCodeSamples(controller: ControllerInfo, method: MethodInfo): any[] {
+    const fullPath = this.buildPath(controller.path, method.route, method.version || controller.version);
     const url = `${this.baseUrl}${fullPath}`;
     const verb = method.httpMethod.toUpperCase();
 

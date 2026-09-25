@@ -78,7 +78,7 @@ describe('NestScrambleModule (e2e)', () => {
       expect(res.headers.get('content-type')).toContain('text/html');
 
       const html = await res.text();
-      expect(html).toContain("SPEC_URL = '/docs-json'");
+      expect(html).toContain("SPEC_URL = './docs-json'");
       // The WebSocket and GraphQL consoles ship with every docs page and
       // reveal themselves only when the matching document has entries.
       expect(html).toContain('id="ws-view"');
@@ -137,12 +137,12 @@ describe('NestScrambleModule (e2e)', () => {
     it('serves docs at the configured path instead of /docs', async () => {
       const res = await fetch(`${baseUrl}/api/reference`);
       expect(res.status).toBe(200);
-      expect(await res.text()).toContain("SPEC_URL = '/api/reference-json'");
+      expect(await res.text()).toContain("SPEC_URL = './reference-json'");
     });
 
     it('points the UI at the matching spec URL', async () => {
       const html = await (await fetch(`${baseUrl}/api/reference`)).text();
-      expect(html).toContain('href="/api/reference-json"');
+      expect(html).toContain('href="./reference-json"');
     });
 
     it('serves the spec under the configured path', async () => {
@@ -209,6 +209,11 @@ describe('NestScrambleModule (e2e)', () => {
       expect(spec.paths['/users']).toBeUndefined();
     });
 
+    it('uses a relative spec URL so the docs UI works behind a global prefix', async () => {
+      const html = await (await fetch(`${baseUrl}/docs`)).text();
+      expect(html).toContain("SPEC_URL = './docs-json'");
+    });
+
     it('serves the mock on the prefixed path', async () => {
       // The mock used to build paths without the prefix, so every documented
       // path returned 404 from the mock as soon as a prefix was configured.
@@ -219,6 +224,44 @@ describe('NestScrambleModule (e2e)', () => {
     it('does not serve the mock on the unprefixed path', async () => {
       const res = await fetch(`${baseUrl}/scramble-mock/users/1`);
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe('app.setGlobalPrefix() integration', () => {
+    let app: INestApplication;
+    let baseUrl: string;
+
+    beforeAll(async () => {
+      const dynamicModule = withQuietConsole(() =>
+        NestScrambleModule.forRoot({ sourcePath: FIXTURE_SOURCE, globalPrefix: 'api' }),
+      );
+
+      @Module({ imports: [dynamicModule] })
+      class TestAppModule {}
+
+      app = await NestFactory.create(TestAppModule, { logger: false });
+      app.setGlobalPrefix('api');
+      await app.listen(0);
+      baseUrl = (await app.getUrl()).replace('[::1]', '127.0.0.1');
+    });
+
+    afterAll(async () => {
+      await app?.close();
+    });
+
+    it('serves the docs under the global prefix', async () => {
+      const res = await fetch(`${baseUrl}/api/docs`);
+      expect(res.status).toBe(200);
+    });
+
+    it('resolves the OpenAPI spec URL relative to the docs page', async () => {
+      const html = await (await fetch(`${baseUrl}/api/docs`)).text();
+      expect(html).toContain("SPEC_URL = './docs-json'");
+    });
+
+    it('serves the mock under the global prefix', async () => {
+      const res = await fetch(`${baseUrl}/api/scramble-mock/api/users/1`);
+      expect(res.status).toBe(200);
     });
   });
 

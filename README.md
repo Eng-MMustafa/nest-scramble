@@ -12,7 +12,7 @@
 [![Author](https://img.shields.io/badge/Author-Mohamed%20Mustafa-blue.svg)](https://github.com/Eng-MMustafa)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Eng-MMustafa/nest-scramble/master/assets/docs-overview.png" alt="Nest-Scramble documentation overview" width="900" />
+  <img src="docs/screenshots/01-overview.png" alt="Nest-Scramble documentation overview" width="900" />
 </p>
 
 ---
@@ -59,17 +59,30 @@ The scanner walks your TypeScript AST and produces the full documentation, conso
 A complete, self-contained API client served at `/docs` — **no CDN, no external fonts, works offline**.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Eng-MMustafa/nest-scramble/master/assets/docs-request.png" alt="Request builder with auto-generated body and real 201 response" width="900" />
+  <img src="docs/screenshots/02-rest-request.png" alt="Request builder with auto-generated body" width="900" />
 </p>
 
 - **Smart request bodies** — generated from your DTOs with realistic values: `customerEmail` becomes a real email, nested `shippingAddress` and `items[]` arrays are fully assembled, and numbers **respect your `@Min`/`@Max` constraints**. Hit Send and get a real `201 Created`.
-- **Params · Auth · Headers · Body · Docs · Code tabs** — path/query params sync live with the URL bar, per-request or global auth (Bearer/API-key/Basic), generated snippets for curl, fetch, axios and more.
-- **Environments & share links** — Postman-style `{{variables}}` with a base-URL per environment, and one-click links that encode the entire request in the URL hash.
-- **Request history** and **Postman collection export**, straight from the topbar.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Eng-MMustafa/nest-scramble/master/assets/docs-params-light.png" alt="Query params synced with the URL, light theme" width="900" />
+  <img src="docs/screenshots/03-rest-response.png" alt="Live response with status, timing and formatted JSON" width="900" />
 </p>
+
+- **Params · Auth · Headers · Body · Docs · Code tabs** — path/query params sync live with the URL bar, per-request or global auth (Bearer/API-key/Basic), generated snippets for curl, fetch, axios and more.
+- **Auth panel** — per-request or global Bearer, API-key or Basic credentials.
+
+<p align="center">
+  <img src="docs/screenshots/04-auth-panel.png" alt="Auth panel with Bearer token" width="900" />
+</p>
+
+- **File uploads** — `multipart/form-data` endpoints get a drag-and-ready file picker plus URL/base64 sources.
+
+<p align="center">
+  <img src="docs/screenshots/05-file-upload.png" alt="File upload endpoint with multipart form" width="900" />
+</p>
+
+- **Environments & share links** — Postman-style `{{variables}}` with a base-URL per environment, and one-click links that encode the entire request in the URL hash.
+- **Request history** and **Postman collection export**, straight from the topbar.
 
 Everything you see was inferred: the enum values, the validation constraints (`minLength`, `minimum`, `format: email`), the `404`/`409` responses from your `throw new NotFoundException(...)` statements, and even envelopes returned without a type annotation.
 
@@ -80,7 +93,7 @@ Everything you see was inferred: the enum values, the validation constraints (`m
 `@WebSocketGateway()` and `@SubscribeMessage()` handlers are scanned exactly like controllers: payload and response DTOs become schemas, served at `/docs-ws-json`, and the docs grow a **live console**.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Eng-MMustafa/nest-scramble/master/assets/ws-live.png" alt="Live WebSocket console: ack, broadcast and presence events with timestamps" width="900" />
+  <img src="docs/screenshots/06-websocket.png" alt="Live WebSocket console: connected, ack and events with timestamps" width="900" />
 </p>
 
 - **Connect over Socket.IO or raw WebSocket** — the Socket.IO client is served by *your own server*, no CDN.
@@ -100,7 +113,7 @@ Everything you see was inferred: the enum values, the validation constraints (`m
 `@Resolver()`, `@Query()`, `@Mutation()` and `@Subscription()` are discovered statically — the resolver doesn't even need to be registered in a module for the docs to see it. Arguments and return types become schemas, an SDL sketch is generated per operation, and the document is served at `/docs-graphql-json`.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Eng-MMustafa/nest-scramble/master/assets/graphql-response.png" alt="GraphQL console with pre-filled query, variables and a real response" width="900" />
+  <img src="docs/screenshots/07-graphql.png" alt="GraphQL console with pre-filled query, variables and a real response" width="900" />
 </p>
 
 - Operations grouped by resolver in the sidebar with `QRY` / `MUT` / `SUB` badges.
@@ -108,7 +121,7 @@ Everything you see was inferred: the enum values, the validation constraints (`m
 - Response with status and timing, right under the editors.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Eng-MMustafa/nest-scramble/master/assets/graphql-light.png" alt="GraphQL console in the light theme" width="900" />
+  <img src="docs/screenshots/08-light-mode.png" alt="Workspace in the light theme" width="900" />
 </p>
 
 ---
@@ -286,13 +299,15 @@ Every CLI feature is exported as a typed function — build your own tooling on 
 
 ---
 
-## What's New in v5.3.0
+## What's New in v5.5.0
 
-- **GraphQL support** — resolvers scanned statically, documented at `/docs-graphql-json`, with a live query console in the docs UI.
-- **Scenario generation** — `nest-scramble test src --generate` writes runnable, contract-validated test flows derived from your API.
-- **GitHub Action** — docs health gate + breaking-change detection for every PR in three lines.
-- **Inferred return types documented** — `return { total, items }` without an annotation now produces the real schema everywhere.
-- **Console UX overhaul** — responses and live events sit directly under the editors, realistic data is pre-filled for every console, and the WS console auto-connects on Send.
+- **Polished docs UI** — redesigned workspace with refined dark/light themes, glassmorphism topbar, animated panels and improved readability.
+- **Professional REST console** — cleaner request bar, syntax-highlighted body editor, formatted responses with copy/download, and per-request auth.
+- **Live WebSocket console** — connect via Socket.IO or raw WebSocket, send events, see acks/broadcasts with timestamps and a live event counter.
+- **GraphQL query runner** — pre-filled operations and variables, one-click execution against your endpoint with timing and status.
+- **Unified `globalPrefix` support** — OpenAPI, Postman, typed client, mock server and dashboard URLs all respect `app.setGlobalPrefix()`.
+- **Smarter optional detection** — `param?: string` is correctly marked optional regardless of `strictNullChecks`.
+- **Conditional security schemes** — `bearerAuth` / `apiKey` appear only when routes actually require auth.
 
 Full history in the [CHANGELOG](CHANGELOG.md).
 

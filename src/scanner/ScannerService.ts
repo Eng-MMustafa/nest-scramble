@@ -453,9 +453,11 @@ export class ScannerService {
         parameterLocation = 'header';
       }
 
+      const isOptional = param.questionToken !== undefined || param.initializer !== undefined;
+
       return {
         name: param.name.getText(),
-        type: analyzer.analyzeType(analyzer.typeOf(param)),
+        type: analyzer.analyzeType(analyzer.typeOf(param), isOptional),
         decorator: decoratorText,
         parameterLocation,
       };

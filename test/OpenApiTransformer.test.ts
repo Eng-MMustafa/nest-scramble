@@ -51,8 +51,22 @@ describe('OpenApiTransformer', () => {
       expect(spec.servers[0].url).toBe('https://api.example.com');
     });
 
-    it('includes bearerAuth security scheme', () => {
+    it('omits securitySchemes when no route requires auth', () => {
       const spec = transformer.transform([], 'API', '1.0.0', 'http://localhost:3000');
+      expect(spec.components.securitySchemes).toBeUndefined();
+    });
+
+    it('includes bearerAuth security scheme when a route requires auth', () => {
+      const controller = buildController({
+        name: 'UsersController',
+        path: 'users',
+        hasGuards: true,
+        guardTypes: ['JwtAuthGuard'],
+        methods: [
+          { name: 'findAll', httpMethod: 'get', route: '', parameters: [], returnType: stringType },
+        ],
+      });
+      const spec = transformer.transform([controller], 'API', '1.0.0', 'http://localhost:3000');
       expect(spec.components.securitySchemes).toHaveProperty('bearerAuth');
     });
   });
@@ -160,6 +174,27 @@ describe('OpenApiTransformer', () => {
       const op = spec.paths['/users/search'].get;
       expect(op.parameters.some((p: any) => p.in === 'query' && p.name === 'q')).toBe(true);
     });
+
+    it('marks an optional query parameter as not required', () => {
+      const controller = buildController({
+        methods: [
+          {
+            name: 'search',
+            httpMethod: 'get',
+            route: 'search',
+            parameters: [
+              { name: 'q', type: { ...stringType, isOptional: true }, decorator: 'Query', parameterLocation: 'query' },
+            ],
+            returnType: stringType,
+          },
+        ],
+      });
+      const spec = transformer.transform([controller], 'API', '1.0.0', 'http://localhost:3000');
+      const op = spec.paths['/users/search'].get;
+      const param = op.parameters.find((p: any) => p.in === 'query' && p.name === 'q');
+      expect(param).toBeDefined();
+      expect(param.required).toBe(false);
+    });
   });
 
   // ── Request body ──────────────────────────────────────────────────────────
@@ -181,6 +216,56 @@ describe('OpenApiTransformer', () => {
       const op = spec.paths['/users'].post;
       expect(op.requestBody).toBeDefined();
       expect(op.requestBody.content).toHaveProperty('application/json');
+    });
+  });
+
+  // ── Code samples ────────────────────────────────────────────────────────────
+
+  describe('code samples', () => {
+    it('includes the controller path in generated curl samples', () => {
+      const controller = buildController({
+        methods: [{ name: 'findAll', httpMethod: 'get', route: '', parameters: [], returnType: stringType }],
+      });
+      const spec = transformer.transform([controller], 'API', '1.0.0', 'http://localhost:3000');
+      const samples = spec.paths['/users'].get['x-code-samples'];
+      const curl = samples.find((s: any) => s.lang === 'curl');
+      expect(curl.source).toContain('http://localhost:3000/users');
+    });
+
+    it('includes route parameters in generated fetch samples', () => {
+      const controller = buildController({
+        methods: [
+          {
+            name: 'findOne',
+            httpMethod: 'get',
+            route: ':id',
+            parameters: [{ name: 'id', type: numberType, decorator: 'Param', parameterLocation: 'path' }],
+            returnType: stringType,
+          },
+        ],
+      });
+      const spec = transformer.transform([controller], 'API', '1.0.0', 'http://localhost:3000');
+      const samples = spec.paths['/users/{id}'].get['x-code-samples'];
+      const fetch = samples.find((s: any) => s.lang === 'javascript');
+      expect(fetch.source).toContain('http://localhost:3000/users/{id}');
+    });
+
+    it('emits date-time format for Date return types', () => {
+      const controller = buildController({
+        methods: [
+          {
+            name: 'now',
+            httpMethod: 'get',
+            route: 'now',
+            parameters: [],
+            returnType: { type: 'string', isArray: false, isOptional: false, format: 'date-time' },
+          },
+        ],
+      });
+      const spec = transformer.transform([controller], 'API', '1.0.0', 'http://localhost:3000');
+      const schema = spec.paths['/users/now'].get.responses['200'].content['application/json'].schema;
+      expect(schema.type).toBe('string');
+      expect(schema.format).toBe('date-time');
     });
   });
 

@@ -157,4 +157,13 @@ describe('PostmanCollectionGenerator', () => {
       expect(col.item).toHaveLength(0);
     });
   });
+
+  describe('global prefix', () => {
+    it('prepends the global prefix to request URLs', () => {
+      const prefixed = new PostmanCollectionGenerator('http://localhost:3000', 'api');
+      const col = prefixed.generateCollection([usersController]);
+      const findAllReq = col.item[0].item!.find(r => r.name?.toLowerCase().includes('findall'));
+      expect(findAllReq?.request?.url?.raw).toBe('http://localhost:3000/api/users');
+    });
+  });
 });

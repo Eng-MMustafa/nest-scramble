@@ -21,14 +21,15 @@ const BODILESS_STATUSES = new Set([204, 205, 304]);
 /**
  * Extracts the pathname of a request without depending on the HTTP adapter.
  *
- * Express decorates the request with `path`, but Fastify middleware receives the
- * raw Node request, which only exposes `url` including the query string. Relying
- * on `path` alone made the mock silently unreachable on Fastify.
+ * Express decorates the request with `path`, but that value is relative to the
+ * middleware's mount point, so the same middleware sees different values on
+ * different adapters. `originalUrl` is the full request path on Express and also
+ * available on the raw Node request used by Fastify, making it the reliable
+ * source. The query string is stripped so `/scramble-mock/users?foo=bar` still
+ * matches the mock prefix.
  */
 function requestPath(req: any): string {
-  if (typeof req?.path === 'string') return req.path;
-
-  const url: string = req?.originalUrl ?? req?.url ?? '';
+  const url: string = req?.originalUrl ?? req?.url ?? req?.path ?? '';
   const queryStart = url.indexOf('?');
   return queryStart === -1 ? url : url.slice(0, queryStart);
 }
@@ -57,22 +58,30 @@ interface CompiledRoute {
 @Injectable()
 export class MockMiddleware implements NestMiddleware {
   private readonly routes: CompiledRoute[];
+  private readonly mockPrefixes: string[];
 
   constructor(
     @Inject('NEST_SCRAMBLE_CONTROLLERS') private controllers: ControllerInfo[],
     @Optional() @Inject(MOCK_GLOBAL_PREFIX) globalPrefix?: string,
   ) {
+    const normalizedPrefix = (globalPrefix || '').replace(/^\/+|\/+$/g, '');
+    const prefixes = [MOCK_PATH_PREFIX];
+    if (normalizedPrefix) {
+      prefixes.unshift(`/${normalizedPrefix}${MOCK_PATH_PREFIX}`);
+    }
+    this.mockPrefixes = prefixes;
     this.routes = this.compileRoutes(globalPrefix || '');
   }
 
   use(req: any, res: any, next: any) {
     const path = requestPath(req);
+    const mockPrefix = this.mockPrefixes.find(p => path === p || path.startsWith(`${p}/`));
 
-    if (path !== MOCK_PATH_PREFIX && !path.startsWith(`${MOCK_PATH_PREFIX}/`)) {
+    if (!mockPrefix) {
       return next();
     }
 
-    const apiPath = path.slice(MOCK_PATH_PREFIX.length) || '/';
+    const apiPath = path.slice(mockPrefix.length) || '/';
     const match = this.findMatchingRoute(apiPath, req.method);
 
     if (!match) {

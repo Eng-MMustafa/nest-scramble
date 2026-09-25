@@ -329,7 +329,7 @@ describe('CLI (e2e)', () => {
       expect(result.status).toBe(0);
       const patched = fs.readFileSync(target, 'utf-8');
       expect(patched).toContain("import { NestScrambleModule } from 'nest-scramble';");
-      expect(patched).toContain('NestScrambleModule.forRoot(),');
+      expect(patched).toContain("NestScrambleModule.forRoot({ path: '/docs', sourcePath: 'src' }),");
       // The import lands after the existing imports, not inside the decorator.
       expect(patched.indexOf('nest-scramble')).toBeLessThan(patched.indexOf('@Module'));
     });

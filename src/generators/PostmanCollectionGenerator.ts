@@ -62,9 +62,11 @@ interface PostmanVariable {
 
 export class PostmanCollectionGenerator {
   private baseUrl: string;
+  private globalPrefix: string;
 
-  constructor(baseUrl = '{{baseUrl}}') {
+  constructor(baseUrl = '{{baseUrl}}', globalPrefix = '') {
     this.baseUrl = baseUrl;
+    this.globalPrefix = globalPrefix.replace(/^\/+|\/+$/g, '');
   }
 
   /**
@@ -111,7 +113,7 @@ export class PostmanCollectionGenerator {
   }
 
   private createRequest(controller: ControllerInfo, method: MethodInfo): PostmanRequest {
-    const fullPath = this.buildPath(controller.path, method.route);
+    const fullPath = this.buildPath(this.globalPrefix, controller.path, method.route);
     const url = this.parseUrl(fullPath);
 
     const request: PostmanRequest = {
@@ -170,9 +172,12 @@ export class PostmanCollectionGenerator {
     return request;
   }
 
-  private buildPath(controllerPath: string, methodRoute: string): string {
-    const parts = [controllerPath, methodRoute].filter(p => p);
-    return parts.join('/').replace(/\/+/g, '/');
+  private buildPath(...parts: string[]): string {
+    return parts
+      .map(p => p.replace(/^\/+|\/+$/g, ''))
+      .filter(Boolean)
+      .join('/')
+      .replace(/\/+/g, '/');
   }
 
   private parseUrl(path: string): PostmanRequest['url'] {

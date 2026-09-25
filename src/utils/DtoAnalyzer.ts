@@ -10,6 +10,8 @@ export interface AnalyzedType {
   properties?: PropertyInfo[];
   unionTypes?: string[];
   enumValues?: string[];
+  /** OpenAPI format hint, e.g. `date-time` for JavaScript Date. */
+  format?: string;
 }
 
 export interface PropertyInfo {
@@ -143,6 +145,12 @@ export class DtoAnalyzer {
           isOptional,
           unionTypes: unionTypes.map(t => this.typeText(t)),
         };
+      }
+
+      // JavaScript Date serializes to an ISO-8601 string over the wire.
+      // Documenting it as an object with Date methods is misleading.
+      if (symbol && symbol.getName() === 'Date') {
+        return { type: 'string', isArray: false, isOptional, format: 'date-time' };
       }
 
       // Check if it's a class or interface

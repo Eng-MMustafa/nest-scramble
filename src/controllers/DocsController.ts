@@ -50,8 +50,11 @@ export function createDocsController(config: { path?: string } = {}): Type<any> 
     // library upgrade that served users a stale console UI.
     @Header('Cache-Control', 'no-store')
     getDocs(): string {
+      // Use a relative URL so the browser resolves it against the current path.
+      // This keeps the docs UI working both with and without app.setGlobalPrefix().
+      const docsSegment = docsPath.split('/').pop() || 'docs';
       return renderDocsPage({
-        specUrl: `/${docsPath}-json`,
+        specUrl: `./${docsSegment}-json`,
         title: this.options?.apiTitle ? `${this.options.apiTitle} — API Documentation` : undefined,
         primaryColor: this.options?.primaryColor,
         theme: this.options?.theme,

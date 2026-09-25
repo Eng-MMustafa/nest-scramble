@@ -127,7 +127,8 @@ export class CacheManager {
       ScrambleLogger.info(`[CacheManager] Loaded cache with ${this.metadata.controllers.size} controller(s)`);
       return true;
     } catch (error) {
-      ScrambleLogger.error('[CacheManager] Error loading cache:', error);
+      ScrambleLogger.error(`[CacheManager] Cache file is unreadable or corrupt; starting fresh. (${(error as Error).message})`);
+      this.removeCacheFile();
       return false;
     }
   }
@@ -331,6 +332,19 @@ export class CacheManager {
       return true;
     }
     return this.metadata.tsConfigHash !== currentHash;
+  }
+
+  /**
+   * Remove the cache file from disk without throwing.
+   */
+  private removeCacheFile(): void {
+    try {
+      if (fs.existsSync(this.cacheFilePath)) {
+        fs.unlinkSync(this.cacheFilePath);
+      }
+    } catch {
+      // Best-effort cleanup; callers already know loading failed.
+    }
   }
 
   /**

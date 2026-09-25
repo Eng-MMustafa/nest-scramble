@@ -115,6 +115,7 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
     const options = NestScrambleModule.moduleOptions;
     const baseUrl = options.baseUrl;
     const docsPath = NestScrambleModule.docsPath;
+    const prefix = options.globalPrefix ? `/${options.globalPrefix.replace(/^\/+|\/+$/g, '')}` : '';
 
     const cyan = '\x1b[36m';
     const purple = '\x1b[35m';
@@ -132,11 +133,11 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
     lines.push(`${gradient}┌${rule}┐${reset}`);
     lines.push(`${gradient}│${reset} ${cyan}${bold}✨ NEST-SCRAMBLE${reset} ${dim}by Mohamed Mustafa${reset}`);
     lines.push(`${gradient}│${reset}`);
-    lines.push(`${gradient}│${reset} ${green}●${reset} ${bold}Documentation${reset}  ${cyan}${baseUrl}/${docsPath}${reset}`);
-    lines.push(`${gradient}│${reset} ${green}●${reset} ${bold}OpenAPI Spec${reset}   ${cyan}${baseUrl}/${docsPath}-json${reset}`);
+    lines.push(`${gradient}│${reset} ${green}●${reset} ${bold}Documentation${reset}  ${cyan}${baseUrl}${prefix}/${docsPath}${reset}`);
+    lines.push(`${gradient}│${reset} ${green}●${reset} ${bold}OpenAPI Spec${reset}   ${cyan}${baseUrl}${prefix}/${docsPath}-json${reset}`);
     if (options.enableMock !== false) {
       lines.push(
-        `${gradient}│${reset} ${green}●${reset} ${bold}Mock Server${reset}    ${cyan}${baseUrl}/${MOCK_ROUTE_PREFIX}${reset}`,
+        `${gradient}│${reset} ${green}●${reset} ${bold}Mock Server${reset}    ${cyan}${baseUrl}${prefix}/${MOCK_ROUTE_PREFIX}${reset}`,
       );
     }
     lines.push(`${gradient}│${reset}`);
@@ -294,7 +295,7 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
     ScrambleLogger.debug('OpenAPI specification generated');
 
     if (config.autoExportPostman) {
-      const generator = new PostmanCollectionGenerator(config.baseUrl);
+      const generator = new PostmanCollectionGenerator(config.baseUrl, config.globalPrefix);
       const collection = generator.generateCollection(controllers);
       fs.writeFileSync(config.postmanOutputPath, JSON.stringify(collection, null, 2));
       ScrambleLogger.info(`Postman collection exported to ${config.postmanOutputPath}`);
@@ -363,8 +364,20 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
 
     // The route pattern differs between Express 4 (NestJS 10) and Express 5
     // (NestJS 11), where anonymous `*` wildcards are rejected outright.
+    //
+    // When the host app uses app.setGlobalPrefix(), root-level middleware paths
+    // are no longer reachable, so the mock is also mounted under that prefix.
+    const mountPaths = [MOCK_ROUTE_PREFIX];
+    if (NestScrambleModule.moduleOptions.globalPrefix) {
+      mountPaths.unshift(
+        `${NestScrambleModule.moduleOptions.globalPrefix.replace(/^\/+|\/+$/g, '')}/${MOCK_ROUTE_PREFIX}`,
+      );
+    }
+
     consumer
       .apply(MockMiddleware)
-      .forRoutes({ path: buildWildcardRoute(MOCK_ROUTE_PREFIX), method: RequestMethod.ALL });
+      .forRoutes(
+        ...mountPaths.map(path => ({ path: buildWildcardRoute(path), method: RequestMethod.ALL })),
+      );
   }
 }

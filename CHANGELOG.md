@@ -6,6 +6,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [5.5.0] - 2026-09-25
+
+### Added
+- **Polished documentation UI.** Redesigned the built-in docs workspace with a
+  refined dark theme, glassmorphism topbar, animated panels, improved spacing,
+  a hero-style overview page and a cohesive light theme.
+- **Professional REST request console.** Cleaner Postman-style URL bar with a
+  focused state ring, syntax-highlighted body editor, formatted responses with
+  copy/download and per-request Bearer/API-key/Basic auth popover.
+- **Live WebSocket console.** Socket.IO or raw WebSocket transport selector,
+  event input, pre-filled payload editor, live event log with direction badges
+  and timestamps, plus an auto-connect-on-send flow.
+- **GraphQL query runner.** Pre-filled operation and variables editors,
+  one-click execution against `/graphql`, and a response panel with status and
+  timing.
+- **Schema count card** on the overview page when OpenAPI components exist.
+
+### Fixed
+- **Unified `globalPrefix` handling.** OpenAPI paths, code samples, Postman
+  collections, typed clients, generated scenarios, mock-server paths and the
+  dashboard links now all honour `app.setGlobalPrefix()` / `globalPrefix`.
+- **Mock server with global prefix.** Previously returned 404 when the app used
+  a global prefix; now mounted at `{globalPrefix}/scramble-mock`.
+- **Optional parameter detection no longer depends on `strictNullChecks`.**
+  Optional query/path parameters are correctly documented as optional by
+  reading `questionToken` and initializers, not only the nullable checker type.
+- **Security schemes are conditional.** `bearerAuth` and `apiKey` components are
+  only added when at least one route requires authentication.
+- **`doctor` CLI accepts `--globalPrefix`.** Restored parity with the GitHub
+  Action input.
+- **`OpenApiTransformer` code samples** now include the controller path so URLs
+  like `/users/{id}` are generated instead of `/{id}`.
+
+---
+
 ## [5.3.0] - 2026-08-28
 
 ### Added
