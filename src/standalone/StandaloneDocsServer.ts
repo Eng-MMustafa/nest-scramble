@@ -9,6 +9,8 @@ import { ScannerService } from '../scanner/ScannerService';
 import { OpenApiTransformer } from '../utils/OpenApiTransformer';
 import { ExpressScanner } from '../express/ExpressScanner';
 import { ExpressOpenApiTransformer } from '../express/ExpressOpenApiTransformer';
+import { ExpressWebSocketScanner } from '../express/ExpressWebSocketScanner';
+import { ExpressGraphQLScanner } from '../express/ExpressGraphQLScanner';
 
 export interface StandaloneDocsOptions {
   sourcePath?: string;
@@ -38,6 +40,9 @@ export class StandaloneDocsServer {
     ScrambleLogger.info(`Detected framework: ${framework || 'unknown'}`);
 
     let spec: any;
+    let wsDocument: any = { gateways: [] };
+    let graphqlDocument: any = { resolvers: [] };
+
     if (framework === 'nestjs') {
       const scanner = new ScannerService();
       const controllers = scanner.scanControllers(sourcePath);
@@ -52,7 +57,8 @@ export class StandaloneDocsServer {
         options.baseUrl || AutoDetector.detectBaseUrl(),
       );
     } else if (framework === 'express') {
-      const controllers = ExpressScanner.scan(path.resolve(sourcePath));
+      const absoluteSource = path.resolve(sourcePath);
+      const controllers = ExpressScanner.scan(absoluteSource);
       const transformer = new ExpressOpenApiTransformer();
       spec = transformer.transform(
         controllers,
@@ -60,6 +66,16 @@ export class StandaloneDocsServer {
         options.version || detector.packageJson.version || AutoDetector.getAppVersion(),
         options.baseUrl || AutoDetector.detectBaseUrl(),
       );
+
+      const gateways = ExpressWebSocketScanner.scan(absoluteSource);
+      if (gateways.length) {
+        wsDocument = { gateways };
+      }
+
+      const resolvers = ExpressGraphQLScanner.scan(absoluteSource);
+      if (resolvers.length) {
+        graphqlDocument = { resolvers };
+      }
     } else {
       throw new Error(
         'Could not detect project framework. Please run this command from a NestJS or Express project root.',
@@ -97,10 +113,10 @@ export class StandaloneDocsServer {
         res.end(JSON.stringify(spec, null, 2));
       } else if (url === `/${docsPath}-ws-json`) {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ gateways: [] }, null, 2));
+        res.end(JSON.stringify(wsDocument, null, 2));
       } else if (url === `/${docsPath}-graphql-json`) {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ resolvers: [] }, null, 2));
+        res.end(JSON.stringify(graphqlDocument, null, 2));
       } else if (proxyTarget) {
         this.proxyRequest(req, res, proxyTarget);
       } else {

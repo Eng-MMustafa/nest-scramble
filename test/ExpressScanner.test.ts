@@ -79,6 +79,26 @@ describe('ExpressScanner', () => {
     const routes = controllers.flatMap(c => c.routes);
     expect(routes.map(r => r.path)).toEqual(['/users']);
   });
+
+  it('infers JSON body schema from req.body destructuring', () => {
+    const root = makeProject({
+      'src/routes/users.js': `
+        app.post('/users', (req, res) => {
+          const { name, email } = req.body;
+          if (!name || !email) return res.status(400).json({ message: 'required' });
+          res.status(201).json({ id: 1, name, email });
+        });
+      `,
+    });
+    roots.push(root);
+
+    const controllers = ExpressScanner.scan(path.join(root, 'src'));
+    const route = controllers[0].routes[0];
+    expect(route.bodySchema).toBeDefined();
+    expect(Object.keys(route.bodySchema!.properties)).toEqual(['name', 'email']);
+    expect(route.bodySchema!.required).toEqual(['name', 'email']);
+    expect(route.consumes).toEqual(['application/json']);
+  });
 });
 
 describe('ExpressOpenApiTransformer', () => {

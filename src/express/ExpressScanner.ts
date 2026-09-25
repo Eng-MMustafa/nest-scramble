@@ -14,6 +14,7 @@ export interface ExpressRouteInfo {
   security?: any[];
   hasFileUpload?: boolean;
   consumes?: string[];
+  bodySchema?: { properties: Record<string, any>; required: string[] };
 }
 
 export interface ExpressControllerInfo {
@@ -311,7 +312,12 @@ export class ExpressScanner {
     }
 
     const hasFileUpload = body ? /upload\.(single|array|fields|any)\s*\(/.test(body) : false;
-    const consumes = hasFileUpload ? ['multipart/form-data'] : body && /req\.body/.test(body) ? ['application/json'] : undefined;
+    const bodySchema = body ? this.extractBodySchema(body) : undefined;
+    const consumes = hasFileUpload
+      ? ['multipart/form-data']
+      : body && /req\.body/.test(body)
+        ? ['application/json']
+        : undefined;
 
     const security = body && /requireAuth|isAuthenticated|authMiddleware|ensureAuth|passport\.authenticate/.test(body)
       ? [{ bearerAuth: [] }]
@@ -328,7 +334,44 @@ export class ExpressScanner {
       security,
       hasFileUpload,
       consumes,
+      bodySchema,
     };
+  }
+
+  /**
+   * Heuristically infer the JSON body schema from the handler body.
+   *
+   * Looks for destructuring patterns like `const { name, email } = req.body` and
+   * for validation checks like `if (!name) return res.status(400)...`.
+   */
+  private static extractBodySchema(body: string): { properties: Record<string, any>; required: string[] } | undefined {
+    if (!body) return undefined;
+
+    // Matches: const { a, b } = req.body  OR  const { a, b } = req.body || {}
+    const destructuringPattern = /(?:const|let|var)\s*\{\s*([^}]+)\}\s*=\s*req\.body(?:\s*\|\|\s*\{\})?/;
+    const match = destructuringPattern.exec(body);
+    if (!match) return undefined;
+
+    const fields = match[1]
+      .split(',')
+      .map((f) => f.trim())
+      .filter((f) => f.length > 0)
+      .map((f) => f.split(':')[0].trim()); // handle aliases: name: fullName
+
+    const required: string[] = [];
+    const properties: Record<string, any> = {};
+
+    for (const field of fields) {
+      properties[field] = { type: 'string' };
+      // Treat field as required if there is any guard like `if (!field)` or
+      // `if (!field || !other)` anywhere in the handler body.
+      const requiredPattern = new RegExp(`!${field}\\b`, 'g');
+      if (requiredPattern.test(body)) {
+        required.push(field);
+      }
+    }
+
+    return { properties, required };
   }
 
   private static extractPrecedingJsDoc(text: string, routeIndex: number): { summary?: string; description?: string } {

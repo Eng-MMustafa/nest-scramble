@@ -12,6 +12,8 @@ export * from './diff/SpecDiff';
 export * from './doctor/DocsDoctor';
 export * from './express/ExpressScanner';
 export * from './express/ExpressOpenApiTransformer';
+export * from './express/ExpressWebSocketScanner';
+export * from './express/ExpressGraphQLScanner';
 export * from './standalone/StandaloneDocsServer';
 export * from './drift/DriftDetector';
 export * from './drift/DriftMiddleware';

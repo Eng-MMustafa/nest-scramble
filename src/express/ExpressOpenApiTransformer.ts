@@ -43,10 +43,23 @@ export class ExpressOpenApiTransformer {
           responses: route.responses || { '200': { description: 'OK' } },
         };
 
-        if (route.consumes) {
+        if (route.consumes || route.bodySchema) {
+          const contentType = route.consumes?.[0] || 'application/json';
+          const schema = route.bodySchema
+            ? { type: 'object', properties: route.bodySchema.properties, required: route.bodySchema.required }
+            : {};
+
           operation.requestBody = {
-            content: Object.fromEntries(route.consumes.map((c) => [c, { schema: {} }])),
+            content: { [contentType]: { schema } },
           };
+
+          if (route.hasFileUpload && contentType === 'multipart/form-data') {
+            operation.requestBody.content['multipart/form-data'].schema = {
+              type: 'object',
+              properties: { image: { type: 'string', format: 'binary' } },
+              required: ['image'],
+            };
+          }
         }
 
         if (route.security) {
