@@ -542,7 +542,7 @@ function bodySchemaOf(body: Record<string, any> | undefined): Schema | undefined
 
 /** Lists the media types a body declares. */
 function mediaTypesOf(body: Record<string, any> | undefined): string[] {
-  return Object.keys(body?.content ?? {}).sort();
+  return Object.keys(body?.content ?? {}).sort((a, b) => a.localeCompare(b));
 }
 
 function compareRequestBody(

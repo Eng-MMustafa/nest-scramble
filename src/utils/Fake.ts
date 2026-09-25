@@ -1,4 +1,5 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
+import { randomInt } from 'crypto';
 
 /**
  * Minimal fake-data generator backing the mock server.
@@ -55,11 +56,11 @@ const EMAIL_DOMAINS = ['example.com', 'example.org', 'example.net'];
 export class Fake {
   /** Random integer in the inclusive range [min, max]. */
   static int(min: number, max: number): number {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
+    return randomInt(min, max + 1);
   }
 
   static boolean(): boolean {
-    return Math.random() < 0.5;
+    return randomInt(0, 2) === 1;
   }
 
   static arrayElement<T>(values: readonly T[]): T {

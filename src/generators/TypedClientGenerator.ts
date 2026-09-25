@@ -56,7 +56,7 @@ export class TypedClientGenerator {
 
     if (dtoShapes.size > 0) {
       lines.push('// ─── Types ───────────────────────────────────────────────────────────');
-      const sorted = Array.from(dtoShapes.keys()).sort();
+      const sorted = Array.from(dtoShapes.keys()).sort((a, b) => a.localeCompare(b));
       for (const name of sorted) {
         const properties = dtoShapes.get(name)!;
         if (properties.length === 0) {

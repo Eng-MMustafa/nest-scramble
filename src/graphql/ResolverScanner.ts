@@ -171,8 +171,10 @@ export class ResolverScanner {
       if (!argsDecorator) continue;
 
       const decoratorArgs = getDecoratorArguments(argsDecorator);
-      const nameArg = decoratorArgs.find(ts.isStringLiteral);
-      const optionsArg = decoratorArgs.find(ts.isObjectLiteralExpression);
+      const nameArg = decoratorArgs.find((arg): arg is ts.StringLiteral => ts.isStringLiteral(arg));
+      const optionsArg = decoratorArgs.find((arg): arg is ts.ObjectLiteralExpression =>
+        ts.isObjectLiteralExpression(arg),
+      );
 
       let isOptional = !!param.questionToken;
       if (optionsArg) {

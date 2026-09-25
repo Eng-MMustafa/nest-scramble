@@ -24,7 +24,7 @@ export class OrdersController {
 
   @Post()
   create(): { id: string } {
-    const exists = Math.random() > 0.5;
+    const exists = Date.now() % 2 === 0;
     if (exists) {
       throw new ConflictException();
     }
