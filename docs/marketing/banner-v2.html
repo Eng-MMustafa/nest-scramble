@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>nest-scramble banner</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 1200px; height: 630px; }
+    body {
+      background: #05070a;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #fff;
+      overflow: hidden;
+      position: relative;
+    }
+    .bg {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 78% 18%, rgba(0, 242, 255, 0.14) 0%, transparent 38%),
+        radial-gradient(circle at 18% 82%, rgba(124, 58, 247, 0.13) 0%, transparent 38%),
+        linear-gradient(135deg, #05070a 0%, #0b111c 100%);
+    }
+    .grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+      background-size: 56px 56px;
+      -webkit-mask-image: radial-gradient(circle at 30% 50%, black 30%, transparent 85%);
+      mask-image: radial-gradient(circle at 30% 50%, black 30%, transparent 85%);
+    }
+    .content {
+      position: relative;
+      z-index: 2;
+      padding: 70px 78px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      background: rgba(0, 242, 255, 0.08);
+      border: 1px solid rgba(0, 242, 255, 0.22);
+      color: #00f2ff;
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      margin-bottom: 28px;
+    }
+    h1 {
+      font-size: 86px;
+      font-weight: 900;
+      letter-spacing: -3.5px;
+      line-height: 0.95;
+      margin-bottom: 20px;
+    }
+    .gradient {
+      background: linear-gradient(100deg, #ffffff 0%, #00f2ff 55%, #a371f7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .tagline {
+      font-size: 27px;
+      color: #9aa3b2;
+      line-height: 1.45;
+      max-width: 620px;
+      margin-bottom: 36px;
+    }
+    .features {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 42px;
+    }
+    .pill {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 999px;
+      padding: 10px 18px;
+      font-size: 16px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .pill.cyan { color: #00f2ff; border-color: rgba(0,242,255,0.3); }
+    .pill.purple { color: #a371f7; border-color: rgba(163,113,247,0.3); }
+    .pill.green { color: #38b2ac; border-color: rgba(56,178,172,0.3); }
+    .pill.orange { color: #f6ad55; border-color: rgba(246,173,85,0.3); }
+    .code {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0,0,0,0.35);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 16px 22px;
+      font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+      font-size: 18px;
+      color: #00f2ff;
+      width: fit-content;
+    }
+    .code span { color: #6b7280; }
+    .mockup {
+      position: absolute;
+      right: 68px;
+      top: 84px;
+      width: 480px;
+      height: 462px;
+      background: rgba(255,255,255,0.015);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 22px;
+      padding: 14px;
+      box-shadow: 0 50px 100px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,242,255,0.05);
+      backdrop-filter: blur(8px);
+    }
+    .mockup-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      padding-left: 4px;
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.15); }
+    .mockup img {
+      width: 100%;
+      height: calc(100% - 28px);
+      border-radius: 12px;
+      object-fit: cover;
+      object-position: top;
+    }
+    .glow {
+      position: absolute;
+      right: 220px;
+      top: 140px;
+      width: 260px;
+      height: 260px;
+      background: radial-gradient(circle, rgba(0,242,255,0.18) 0%, transparent 70%);
+      filter: blur(40px);
+      z-index: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="grid"></div>
+  <div class="glow"></div>
+  <div class="content">
+    <div class="badge">v5.6.0 now on npm</div>
+    <h1><span class="gradient">nest-scramble</span></h1>
+    <div class="tagline">API docs, mock server, typed SDKs & live consoles — generated from your code. No decorators. No config.</div>
+    <div class="features">
+      <div class="pill cyan">REST Console</div>
+      <div class="pill purple">WebSocket</div>
+      <div class="pill green">GraphQL</div>
+      <div class="pill orange">Mock Server</div>
+    </div>
+    <div class="code"><span>$</span> npm install nest-scramble</div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-bar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    <img src="file:///F:/github-repos/backend-nestjs/nest-scramble/docs/screenshots/02-rest-request.png" />
+  </div>
+</body>
+</html>
