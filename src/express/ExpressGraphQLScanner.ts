@@ -109,7 +109,7 @@ export class ExpressGraphQLScanner {
       const body = match[2];
 
       // Extract field definitions: fieldName(args): ReturnType
-      const fieldPattern = /(\w+)\s*(?:\(([^)]*)\))?\s*:\s*([\w\[\]!]+)/g;
+      const fieldPattern = /(\w+)\s*(?:\(([^)]*)\))?\s*:\s*([\w[\]!]+)/g;
       let fieldMatch: RegExpExecArray | null;
       while ((fieldMatch = fieldPattern.exec(body)) !== null) {
         const name = fieldMatch[1];
@@ -152,7 +152,7 @@ export class ExpressGraphQLScanner {
     const args: ExpressGraphQLArg[] = [];
     const parts = argsString.split(',').map((s) => s.trim()).filter(Boolean);
     for (const part of parts) {
-      const m = /(\w+)\s*:\s*([\w\[\]!]+)/.exec(part);
+      const m = /(\w+)\s*:\s*([\w[\]!]+)/.exec(part);
       if (!m) continue;
       const name = m[1];
       const graphqlType = m[2];
@@ -184,7 +184,7 @@ export class ExpressGraphQLScanner {
     while ((match = typePattern.exec(sdl)) !== null) {
       const typeName = match[1];
       const body = match[2];
-      const fieldPattern = /(\w+)\s*(?:\([^)]*\))?\s*:\s*([\w\[\]!]+)/g;
+      const fieldPattern = /(\w+)\s*(?:\([^)]*\))?\s*:\s*([\w[\]!]+)/g;
       let fieldMatch: RegExpExecArray | null;
       const typeFields: string[] = [];
       while ((fieldMatch = fieldPattern.exec(body)) !== null) {
@@ -199,7 +199,7 @@ export class ExpressGraphQLScanner {
   }
 
   private static unwrapGraphQLType(graphqlType: string): string {
-    return graphqlType.replace(/^[\[!]+/, '').replace(/[\]!]+$/, '');
+    return graphqlType.replace(/^[[!]+/, '').replace(/[\]!]+$/, '');
   }
 
   private static graphqlTypeToJsonType(graphqlType: string): string {

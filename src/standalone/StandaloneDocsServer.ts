@@ -1,6 +1,7 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
 import * as http from 'http';
 import * as path from 'path';
+import { exec } from 'child_process';
 import { renderDocsPage } from '../utils/DocsPageRenderer';
 import { ScrambleLogger } from '../utils/ScrambleLogger';
 import { AutoDetector, Framework } from '../utils/AutoDetector';
@@ -139,7 +140,7 @@ export class StandaloneDocsServer {
   private openBrowser(url: string): void {
     const command = process.platform === 'win32' ? `start "" "${url}"` : `open "${url}"`;
     try {
-      require('child_process').exec(command);
+      exec(command);
     } catch {
       // Ignore browser-open failures.
     }

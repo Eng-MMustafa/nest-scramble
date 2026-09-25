@@ -245,7 +245,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
         <h4 class="gql-label">GraphQL operation</h4>
         <textarea class="body-editor plain-editor gql-editor" id="gql-query" rows="10" spellcheck="false" placeholder="query { ... }"></textarea>
         <h4 class="gql-label">Variables <span class="dim">(JSON object, optional)</span></h4>
-        <textarea class="body-editor plain-editor" id="gql-variables" rows="3" spellcheck="false" placeholder="{ \"key\": \"value\" }"></textarea>
+        <textarea class="body-editor plain-editor" id="gql-variables" rows="3" spellcheck="false" placeholder="{ &quot;key&quot;: &quot;value&quot; }"></textarea>
         <div class="resp">
           <div class="resp-head">
             <div class="resp-tabs"><span class="resp-title">Response</span></div>

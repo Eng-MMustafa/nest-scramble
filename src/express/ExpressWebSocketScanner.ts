@@ -82,7 +82,7 @@ export class ExpressWebSocketScanner {
   private static extractEvents(text: string): ExpressWebSocketEvent[] {
     const events: ExpressWebSocketEvent[] = [];
     const seen = new Set<string>();
-    const eventPattern = /socket\.on\s*\(\s*['"\`]([^'"\`]+)['"\`]\s*,/g;
+    const eventPattern = /socket\.on\s*\(\s*['"`]([^'"`]+)['"`]\s*,/g;
 
     let match: RegExpExecArray | null;
     const ignoredEvents = new Set(['connection', 'disconnect', 'connect', 'connect_error', 'reconnect']);

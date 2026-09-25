@@ -149,7 +149,7 @@ export class ExpressScanner {
     const routes: ExpressRouteInfo[] = [];
 
     // Capture route-builder declarations so we can associate chained calls.
-    const routeBuilderPattern = /(?:app|router|server)\.route\s*\(\s*['"\`]([^'"\`]+)['"\`]\s*\)/g;
+    const routeBuilderPattern = /(?:app|router|server)\.route\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g;
     const routeBuilders: { index: number; path: string }[] = [];
     let match: RegExpExecArray | null;
     while ((match = routeBuilderPattern.exec(text)) !== null) {
@@ -201,7 +201,7 @@ export class ExpressScanner {
     const variableRequires = this.extractVariableRequires(text, filePath);
 
     // 1. Inline require: app.use('/api', require('./routes/api'))
-    const inlinePattern = /(?:app|server)\.use\s*\(\s*['"\`]([^'"\`]+)['"\`]\s*,\s*require\s*\(\s*['"\`]([^'"\`]+)['"\`]\s*\)\s*\)/g;
+    const inlinePattern = /(?:app|server)\.use\s*\(\s*['"`]([^'"`]+)['"`]\s*,\s*require\s*\(\s*['"`]([^'"`]+)['"`]\s*\)\s*\)/g;
     let match: RegExpExecArray | null;
     while ((match = inlinePattern.exec(text)) !== null) {
       const importPath = match[2];
@@ -212,7 +212,7 @@ export class ExpressScanner {
     }
 
     // 2. Variable reference: const api = require('./routes/api'); app.use('/api', api)
-    const variablePattern = /(?:app|server)\.use\s*\(\s*['"\`]([^'"\`]+)['"\`]\s*,\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\)/g;
+    const variablePattern = /(?:app|server)\.use\s*\(\s*['"`]([^'"`]+)['"`]\s*,\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\)/g;
     while ((match = variablePattern.exec(text)) !== null) {
       const variableName = match[2];
       const resolved = variableRequires.get(variableName);
@@ -227,9 +227,9 @@ export class ExpressScanner {
   private static extractVariableRequires(text: string, filePath: string): Map<string, string> {
     const map = new Map<string, string>();
     const patterns = [
-      /(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*require\s*\(\s*['"\`]([^'"\`]+)['"\`]\s*\)/g,
-      /(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*import\s*\(\s*['"\`]([^'"\`]+)['"\`]\s*\)/g,
-      /import\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s+from\s+['"\`]([^'"\`]+)['"\`]/g,
+      /(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*require\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g,
+      /(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*import\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g,
+      /import\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s+from\s+['"`]([^'"`]+)['"`]/g,
     ];
 
     for (const pattern of patterns) {
@@ -245,7 +245,7 @@ export class ExpressScanner {
     return map;
   }
 
-  private static resolveMounts(parsed: ParsedFile[], sourcePath: string): MountInfo[] {
+  private static resolveMounts(parsed: ParsedFile[], _sourcePath: string): MountInfo[] {
     const fileSet = new Set(parsed.map((p) => p.filePath));
     const mounts: MountInfo[] = [];
 
