@@ -45,16 +45,26 @@ describe('ExpressScanner', () => {
     ]);
   });
 
-  it('finds app.use mounts', () => {
+  it('resolves app.use router mounts and prefixes child routes', () => {
     const root = makeProject({
-      'src/app.js': "app.use('/api/users', require('./routes/users'));",
+      'src/app.js': "const users = require('./routes/users');\napp.use('/api/users', users);",
+      'src/routes/users.js': `
+        const router = require('express').Router();
+        router.get('/', listUsers);
+        router.get('/:id', getUser);
+        router.post('/', createUser);
+        module.exports = router;
+      `,
     });
     roots.push(root);
 
     const controllers = ExpressScanner.scan(path.join(root, 'src'));
-    expect(controllers[0].routes).toHaveLength(1);
-    expect(controllers[0].routes[0].method).toBe('use');
-    expect(controllers[0].routes[0].path).toBe('/api/users');
+    const routes = controllers.flatMap(c => c.routes);
+    expect(routes.map(r => `${r.method} ${r.path}`)).toEqual([
+      'get /api/users',
+      'get /api/users/{id}',
+      'post /api/users',
+    ]);
   });
 
   it('ignores node_modules and build directories', () => {
