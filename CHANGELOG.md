@@ -6,6 +6,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [5.6.0] - 2026-09-25
+
+### Added
+- **`npx nest-scramble serve`** — starts a self-contained docs server for NestJS
+  or Express projects without requiring a module import. Auto-detects the
+  framework from `package.json`, scans the source tree and serves the polished
+  docs UI plus `/docs-json` on a standalone port (default 3001).
+- **Express route scanner** — heuristic static scanner for Express/Node.js apps
+  that recognises `app.get/post/put/patch/delete/all(...)`, `router.*(...)`,
+  `app.use('/prefix', ...)` mounts and `app.route(...).get(...)` builders.
+- **`ExpressOpenApiTransformer`** — converts scanned Express routes into a valid
+  OpenAPI 3.0 document consumable by the built-in docs UI.
+- **Auto-detecting `init`** — `npx nest-scramble init` no longer requires
+  `--module`; it looks for `src/app.module.ts`, `src/app.module.js`,
+  `app.module.ts` and `app.module.js` automatically.
+- **Framework detection** — `AutoDetector.detectFramework()` classifies a project
+  as `nestjs`, `express` or `unknown` from its `package.json` dependencies.
+
+---
+
 ## [5.5.0] - 2026-09-25
 
 ### Added

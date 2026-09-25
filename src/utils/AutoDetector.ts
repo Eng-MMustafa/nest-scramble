@@ -3,11 +3,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ScrambleLogger } from './ScrambleLogger';
 
+export type Framework = 'nestjs' | 'express' | 'unknown';
+
 export interface ProjectStructure {
   rootPath: string;
   sourcePath: string;
   packageJson: any;
   tsConfigPath: string;
+  framework: Framework;
   hasControllers: boolean;
   controllerPaths: string[];
 }
@@ -62,15 +65,32 @@ export class AutoDetector {
     
     // Find controllers
     const controllerPaths = this.findControllers(path.join(rootPath, sourcePath));
+    const framework = this.detectFramework(packageJson);
     
     return {
       rootPath,
       sourcePath,
       packageJson,
       tsConfigPath,
+      framework,
       hasControllers: controllerPaths.length > 0,
       controllerPaths,
     };
+  }
+
+  /**
+   * Detect whether the project is a NestJS app, an Express app, or unknown.
+   * NestJS wins over Express because a NestJS project also lists express as a
+   * transitive platform dependency.
+   */
+  static detectFramework(packageJson: any): Framework {
+    const deps = {
+      ...(packageJson.dependencies || {}),
+      ...(packageJson.devDependencies || {}),
+    };
+    if (deps['@nestjs/core']) return 'nestjs';
+    if (deps['express']) return 'express';
+    return 'unknown';
   }
 
   /**

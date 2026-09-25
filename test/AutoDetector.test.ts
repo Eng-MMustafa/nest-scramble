@@ -258,6 +258,33 @@ describe('AutoDetector.detectProjectStructure', () => {
 
     expect(result.tsConfigPath).toContain('tsconfig.build.json');
   });
+
+  it('detects NestJS framework from dependencies', () => {
+    const result = detectIn({
+      'package.json': JSON.stringify({ dependencies: { '@nestjs/core': '^10.0.0', express: '^4.18.0' } }),
+      'src/main.ts': 'export {};',
+    });
+
+    expect(result.framework).toBe('nestjs');
+  });
+
+  it('detects Express framework when NestJS is absent', () => {
+    const result = detectIn({
+      'package.json': JSON.stringify({ dependencies: { express: '^4.18.0' } }),
+      'src/main.ts': 'export {};',
+    });
+
+    expect(result.framework).toBe('express');
+  });
+
+  it('falls back to unknown framework', () => {
+    const result = detectIn({
+      'package.json': '{}',
+      'src/main.ts': 'export {};',
+    });
+
+    expect(result.framework).toBe('unknown');
+  });
 });
 
 describe('AutoDetector package metadata', () => {

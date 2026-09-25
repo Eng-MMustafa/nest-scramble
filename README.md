@@ -40,17 +40,32 @@ Everything below is discovered **automatically** from your source code. No decor
 
 ```bash
 npm install nest-scramble
-npx nest-scramble init      # injects the module into app.module.ts for you
+npx nest-scramble init      # auto-injects the module into app.module.ts
 npm run start:dev           # open http://localhost:3000/docs
 ```
 
-That's it. `init` writes the one required line into your `AppModule`:
+`init` finds `src/app.module.ts` automatically and writes the one required line for you:
 
 ```typescript
-NestScrambleModule.forRoot({ path: '/docs', sourcePath: 'src' })
+import { NestScrambleModule } from 'nest-scramble';
+
+@Module({
+  imports: [
+    NestScrambleModule.forRoot({ path: '/docs', sourcePath: 'src' }),
+  ],
+})
+export class AppModule {}
 ```
 
 The scanner walks your TypeScript AST and produces the full documentation, consoles, mock server and OpenAPI 3.0 document — **before your app even finishes booting.**
+
+Don't want to touch your app? Run a standalone docs server in **one command** for NestJS or Express projects:
+
+```bash
+npx nest-scramble serve          # auto-detects NestJS or Express
+```
+
+Then open `http://localhost:3001/docs`.
 
 ---
 
@@ -170,6 +185,23 @@ Scenario files are plain JSON — chained requests, `{{variable}}` capture betwe
 
 ---
 
+## 🌐 Plain Express / Node.js apps
+
+Not using NestJS? `nest-scramble serve` scans Express route files and starts a docs server without touching your app code.
+
+```bash
+npx nest-scramble serve
+```
+
+- Auto-detects NestJS vs Express from `package.json`.
+- Serves the same polished docs UI at `http://localhost:3001/docs`.
+- Generates an OpenAPI spec at `/docs-json`.
+- Works with `app.get(...)`, `router.post(...)`, `app.use('/api', ...)` and `app.route(...)` patterns.
+
+For NestJS projects you still get the richer AST-based scan (DTOs, validations, WebSocket, GraphQL) by importing the module or running `serve`.
+
+---
+
 ## ⚙️ CI/CD — the repository doubles as a GitHub Action
 
 ```yaml
@@ -272,6 +304,7 @@ NestScrambleModule.forRoot({
 
 ```bash
 npx nest-scramble init                                   # inject the module — zero code written by you
+npx nest-scramble serve [src]                            # standalone docs server for NestJS or Express
 npx nest-scramble generate src -o openapi.json           # OpenAPI | postman | client via --format
 npx nest-scramble doctor src --min-score 80              # docs health gate
 npx nest-scramble diff ./main/src ./src --fail-on-breaking
@@ -299,14 +332,14 @@ Every CLI feature is exported as a typed function — build your own tooling on 
 
 ---
 
-## What's New in v5.5.0
+## What's New in v5.6.0
 
+- **`npx nest-scramble serve`** — one-command standalone docs server for NestJS or Express projects. No module import needed.
+- **Express route scanning** — auto-detect Express apps and document `app/router` method routes, `app.use()` mounts and `app.route()` builders.
+- **Auto-detecting `init`** — `npx nest-scramble init` now finds `src/app.module.ts` automatically even when `--module` is omitted.
 - **Polished docs UI** — redesigned workspace with refined dark/light themes, glassmorphism topbar, animated panels and improved readability.
-- **Professional REST console** — cleaner request bar, syntax-highlighted body editor, formatted responses with copy/download, and per-request auth.
-- **Live WebSocket console** — connect via Socket.IO or raw WebSocket, send events, see acks/broadcasts with timestamps and a live event counter.
-- **GraphQL query runner** — pre-filled operations and variables, one-click execution against your endpoint with timing and status.
-- **Unified `globalPrefix` support** — OpenAPI, Postman, typed client, mock server and dashboard URLs all respect `app.setGlobalPrefix()`.
-- **Smarter optional detection** — `param?: string` is correctly marked optional regardless of `strictNullChecks`.
+- **Professional REST/WebSocket/GraphQL consoles** with live responses, event logs and query runners.
+- **Unified `globalPrefix` support** across OpenAPI, Postman, typed client, mock server and dashboard URLs.
 - **Conditional security schemes** — `bearerAuth` / `apiKey` appear only when routes actually require auth.
 
 Full history in the [CHANGELOG](CHANGELOG.md).

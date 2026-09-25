@@ -38,7 +38,22 @@ const initCommand: CommandDef = {
   description: 'Auto-inject Nest-Scramble into your NestJS project',
   positionals: [],
   options: [
-    { key: 'module', long: '--module', short: '-m', placeholder: '<path>', default: 'src/app.module.ts', description: 'Path to your app module' },
+    { key: 'module', long: '--module', short: '-m', placeholder: '<path>', default: '', description: 'Path to your app module (auto-detected if omitted)' },
+  ],
+};
+
+const serveCommand: CommandDef = {
+  name: 'serve',
+  description: 'Start a standalone docs server for NestJS or Express projects',
+  positionals: ['sourcePath'],
+  options: [
+    { key: 'port', long: '--port', short: '-p', placeholder: '<port>', default: '3001', description: 'Port for the standalone docs server' },
+    { key: 'baseUrl', long: '--baseUrl', short: '-b', placeholder: '<url>', default: '', description: 'Base URL advertised in the docs' },
+    { key: 'title', long: '--title', short: '-t', placeholder: '<title>', default: '', description: 'API title' },
+    { key: 'apiVersion', long: '--apiVersion', short: '-v', placeholder: '<version>', default: '', description: 'API version' },
+    { key: 'theme', long: '--theme', placeholder: '<theme>', default: 'futuristic', description: 'UI theme: futuristic (dark) or classic (light)' },
+    { key: 'primaryColor', long: '--primary-color', placeholder: '<hex>', default: '', description: 'Primary accent colour' },
+    { key: 'open', long: '--open', boolean: true, description: 'Open the docs in the default browser' },
   ],
 };
 
@@ -90,7 +105,7 @@ const testCommand: CommandDef = {
   ],
 };
 
-const COMMANDS = [generateCommand, initCommand, diffCommand, doctorCommand, changelogCommand, testCommand];
+const COMMANDS = [generateCommand, initCommand, serveCommand, diffCommand, doctorCommand, changelogCommand, testCommand];
 
 async function runGenerate(sourcePath: string, options: {
   output: string;
@@ -164,7 +179,12 @@ async function runInit(options: { module: string }): Promise<void> {
 
       const ts = require('typescript') as typeof import('typescript');
 
-      const modulePath = path.resolve(options.module);
+      const modulePath = path.resolve(options.module || detectAppModulePath());
+      if (!modulePath) {
+        console.error('❌ Could not auto-detect app.module.ts/.js');
+        console.error('💡 Try: nest-scramble init --module src/app.module.ts');
+        process.exit(1);
+      }
 
       if (!fs.existsSync(modulePath)) {
         console.error(`❌ Module file not found: ${modulePath}`);
@@ -294,6 +314,38 @@ async function runInit(options: { module: string }): Promise<void> {
  * Generating from source is the reason this command can run anywhere: no
  * database, no environment variables, no booting the application.
  */
+async function runServe(sourcePath: string, options: {
+  port: string;
+  baseUrl: string;
+  title: string;
+  apiVersion: string;
+  theme: string;
+  primaryColor: string;
+  open: boolean;
+}): Promise<void> {
+  const { StandaloneDocsServer } = await import('./standalone/StandaloneDocsServer');
+  const server = new StandaloneDocsServer();
+  await server.start({
+    sourcePath,
+    port: parseInt(options.port, 10) || 3001,
+    baseUrl: options.baseUrl || undefined,
+    title: options.title || undefined,
+    version: options.apiVersion || undefined,
+    theme: options.theme === 'classic' ? 'classic' : 'futuristic',
+    primaryColor: options.primaryColor || undefined,
+    open: options.open,
+  });
+}
+
+function detectAppModulePath(): string {
+  const candidates = ['src/app.module.ts', 'src/app.module.js', 'app.module.ts', 'app.module.js'];
+  for (const candidate of candidates) {
+    const full = path.resolve(candidate);
+    if (fs.existsSync(full)) return full;
+  }
+  return '';
+}
+
 function loadSpec(target: string, globalPrefix: string): Record<string, any> {
   if (!fs.existsSync(target)) {
     throw new Error(`Path not found: ${target}`);
@@ -508,6 +560,8 @@ async function main(): Promise<void> {
       await runGenerate(positionals[0], options as Parameters<typeof runGenerate>[1]);
     } else if (def === initCommand) {
       await runInit(options as Parameters<typeof runInit>[0]);
+    } else if (def === serveCommand) {
+      await runServe(positionals[0] || '.', options as Parameters<typeof runServe>[1]);
     } else if (def === doctorCommand) {
       runDoctor(positionals[0], options as Parameters<typeof runDoctor>[1]);
     } else if (def === changelogCommand) {
