@@ -30,9 +30,10 @@ describe('ExpressGraphQLScanner', () => {
       'src/graphql/schema.js': `
         const { buildSchema } = require('graphql');
         module.exports = buildSchema(\`
-          type Post { id: ID! title: String! content: String! }
+          type Post { id: ID! title: String! content: String! author: String! }
+          input CreatePostInput { title: String! content: String! author: String! }
           type Query { posts: [Post!]! post(id: ID!): Post }
-          type Mutation { createPost(title: String!): Post }
+          type Mutation { createPost(input: CreatePostInput!): Post }
         \`);
       `,
     });
@@ -42,14 +43,26 @@ describe('ExpressGraphQLScanner', () => {
     expect(resolvers).toHaveLength(1);
     const ops = resolvers[0].operations.map((op) => `${op.kind} ${op.name}: ${op.sample}`);
     expect(ops).toEqual([
-      'query posts: query { posts { id title content } }',
-      'query post: query post($id: ID!) { post(id: $id) { id title content } }',
-      'mutation createPost: mutation createPost($title: String!) { createPost(title: $title) { id title content } }',
+      'query posts: query { posts { id title content author } }',
+      'query post: query post($id: ID!) { post(id: $id) { id title content author } }',
+      'mutation createPost: mutation createPost($input: CreatePostInput!) { createPost(input: $input) { id title content author } }',
     ]);
 
     const createPost = resolvers[0].operations.find((op) => op.name === 'createPost');
     expect(createPost!.args).toEqual([
-      { name: 'title', required: true, graphqlType: 'String!', schema: { type: 'string' } },
+      {
+        name: 'input',
+        required: true,
+        graphqlType: 'CreatePostInput!',
+        schema: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            content: { type: 'string' },
+            author: { type: 'string' },
+          },
+        },
+      },
     ]);
   });
 });

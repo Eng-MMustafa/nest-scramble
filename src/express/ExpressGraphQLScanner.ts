@@ -176,7 +176,9 @@ export class ExpressGraphQLScanner {
 
   private static extractTypeFields(sdl: string): Record<string, string[]> {
     const fields: Record<string, string[]> = {};
-    const typePattern = /type\s+(\w+)\s*\{([^}]*)\}/g;
+    // Capture both `type` and `input` definitions so argument/input types can
+    // be resolved into field lists.
+    const typePattern = /(?:type|input)\s+(\w+)\s*\{([^}]*)\}/g;
     let match: RegExpExecArray | null;
 
     while ((match = typePattern.exec(sdl)) !== null) {
