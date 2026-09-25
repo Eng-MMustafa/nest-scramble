@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>nest-scramble banner v3</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 1200px; height: 630px; }
+    body {
+      background: #02040a;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #fff;
+      overflow: hidden;
+      position: relative;
+    }
+    .bg {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 15% 20%, rgba(0, 242, 255, 0.16) 0%, transparent 32%),
+        radial-gradient(circle at 88% 75%, rgba(124, 58, 247, 0.16) 0%, transparent 34%),
+        linear-gradient(135deg, #02040a 0%, #080c14 100%);
+    }
+    .grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+      background-size: 52px 52px;
+      -webkit-mask-image: radial-gradient(ellipse at 50% 50%, black 40%, transparent 90%);
+      mask-image: radial-gradient(ellipse at 50% 50%, black 40%, transparent 90%);
+    }
+    .layout {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      height: 100%;
+      padding: 0 72px;
+      gap: 48px;
+    }
+    .left {
+      flex: 0 0 520px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0, 242, 255, 0.07);
+      border: 1px solid rgba(0, 242, 255, 0.2);
+      color: #00f2ff;
+      padding: 7px 14px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      margin-bottom: 28px;
+    }
+    h1 {
+      font-size: 78px;
+      font-weight: 900;
+      letter-spacing: -3px;
+      line-height: 0.95;
+      margin-bottom: 18px;
+    }
+    .gradient {
+      background: linear-gradient(100deg, #ffffff 0%, #00f2ff 45%, #a371f7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .tagline {
+      font-size: 26px;
+      color: #e2e8f0;
+      font-weight: 500;
+      line-height: 1.35;
+      margin-bottom: 14px;
+    }
+    .sub {
+      font-size: 17px;
+      color: #7e8a9c;
+      line-height: 1.55;
+      margin-bottom: 36px;
+    }
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 16px 22px;
+      font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+      font-size: 17px;
+      color: #00f2ff;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    .cta span { color: #6b7280; }
+    .right {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      perspective: 1300px;
+    }
+    .browser {
+      width: 580px;
+      height: 420px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow:
+        0 50px 100px rgba(0,0,0,0.55),
+        0 0 0 1px rgba(0,242,255,0.04),
+        0 0 80px rgba(0,242,255,0.06);
+      transform: rotateY(-10deg) rotateX(3deg);
+      transform-style: preserve-3d;
+    }
+    .browser-bar {
+      height: 38px;
+      background: #0b0f17;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 16px;
+    }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.15); }
+    .url {
+      margin-left: 14px;
+      flex: 1;
+      background: rgba(255,255,255,0.04);
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 12px;
+      color: #7e8a9c;
+      font-family: ui-monospace, Menlo, monospace;
+    }
+    .browser img {
+      width: 100%;
+      height: calc(100% - 38px);
+      object-fit: cover;
+      object-position: top;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="grid"></div>
+  <div class="layout">
+    <div class="left">
+      <div class="badge">v5.6.0 now on npm</div>
+      <h1><span class="gradient">nest-scramble</span></h1>
+      <div class="tagline">Zero-config API documentation for NestJS & Express</div>
+      <div class="sub">REST console · WebSocket console · GraphQL console · Mock server · Typed SDK · Drift detection</div>
+      <div class="cta"><span>$</span> npm install nest-scramble</div>
+    </div>
+    <div class="right">
+      <div class="browser">
+        <div class="browser-bar">
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="url">localhost:3000/api/docs</div>
+        </div>
+        <img src="file:///F:/github-repos/backend-nestjs/nest-scramble/docs/screenshots/02-rest-request.png" />
+      </div>
+    </div>
+  </div>
+</body>
+</html>
