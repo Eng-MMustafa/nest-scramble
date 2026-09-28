@@ -2,7 +2,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { CacheManager } from '../cache/CacheManager';
-import { ScrambleLogger } from '../utils/ScrambleLogger';
+import { isPathInside, resolveExistingPathWithinRoot } from '../utils/PathSecurity';
+import { sanitizeLogValue, ScrambleLogger } from '../utils/ScrambleLogger';
 
 export interface FileChangeEvent {
   type: 'add' | 'change' | 'unlink';
@@ -50,6 +51,7 @@ export class FileWatcher {
   private pendingChanges: Map<string, FileChangeEvent> = new Map();
   private debounceTimer: NodeJS.Timeout | null = null;
   private isWatching = false;
+  private rootPath = '';
   /** Files seen so far, to tell an `add` apart from a `change`. */
   private knownFiles: Set<string> = new Set();
 
@@ -72,20 +74,21 @@ export class FileWatcher {
     const root = path.resolve(this.options.sourcePath);
 
     if (!fs.existsSync(root)) {
-      ScrambleLogger.error(`[FileWatcher] Source path not found: ${root}`);
+      ScrambleLogger.error(`[FileWatcher] Source path not found: ${sanitizeLogValue(root)}`);
       return;
     }
 
-    ScrambleLogger.info(`[FileWatcher] Starting file watcher on: ${root}`);
+    this.rootPath = fs.realpathSync(root);
+    ScrambleLogger.info(`[FileWatcher] Starting file watcher on: ${sanitizeLogValue(this.rootPath)}`);
 
-    this.indexExistingFiles(root);
+    this.indexExistingFiles(this.rootPath);
 
     try {
-      this.watchRecursively(root);
+      this.watchRecursively(this.rootPath);
     } catch {
       // Recursive fs.watch is unavailable on this platform (older Linux):
       // fall back to one watcher per directory.
-      this.watchDirectoryTree(root);
+      this.watchDirectoryTree(this.rootPath);
     }
 
     this.isWatching = true;
@@ -177,13 +180,19 @@ export class FileWatcher {
    * existence and whether it was seen before.
    */
   private classifyEvent(fullPath: string): void {
-    const normalized = path.normalize(fullPath);
+    let normalized = path.normalize(path.resolve(fullPath));
+    if (!this.rootPath || !isPathInside(this.rootPath, normalized)) return;
     const baseName = path.basename(normalized);
 
     if (!isWatchableFile(baseName)) return;
     if (normalized.split(path.sep).some(isIgnoredDirectory)) return;
 
     if (fs.existsSync(normalized)) {
+      try {
+        normalized = path.normalize(resolveExistingPathWithinRoot(this.rootPath, normalized));
+      } catch {
+        return;
+      }
       const type = this.knownFiles.has(normalized) ? 'change' : 'add';
       this.knownFiles.add(normalized);
       this.handleFileEvent(type, normalized);
@@ -232,7 +241,7 @@ export class FileWatcher {
 
       // Skip if hash hasn't changed
       if (type === 'change' && !this.options.cacheManager.hasFileChanged(normalizedPath, hash)) {
-        ScrambleLogger.info(`[FileWatcher] No content change detected for: ${normalizedPath}`);
+        ScrambleLogger.info(`[FileWatcher] No content change detected for: ${sanitizeLogValue(normalizedPath)}`);
         return;
       }
     }
@@ -245,7 +254,7 @@ export class FileWatcher {
 
     this.pendingChanges.set(normalizedPath, event);
     
-    ScrambleLogger.info(`[FileWatcher] File ${type}: ${normalizedPath}`);
+    ScrambleLogger.info(`[FileWatcher] File ${type}: ${sanitizeLogValue(normalizedPath)}`);
     
     this.scheduleProcessing();
   }

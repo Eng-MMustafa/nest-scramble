@@ -302,15 +302,23 @@ export class StandaloneDocsServer {
     allowHosts: Set<string>,
   ): void {
     let target: URL;
+    let configuredBase: URL;
     try {
-      target = new URL(pathWithQuery, baseUrl.replace(/\/+$/, '') + '/');
+      configuredBase = new URL(baseUrl);
+      target = new URL(pathWithQuery, configuredBase.href.replace(/\/+$/, '') + '/');
     } catch {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ statusCode: 400, message: 'Invalid proxy target' }));
       return;
     }
 
-    if (!allowHosts.has(target.hostname)) {
+    if (
+      !['http:', 'https:'].includes(target.protocol) ||
+      target.username !== '' ||
+      target.password !== '' ||
+      target.origin !== configuredBase.origin ||
+      !allowHosts.has(target.hostname)
+    ) {
       res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({
         statusCode: 403,

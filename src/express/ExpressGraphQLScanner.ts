@@ -78,7 +78,7 @@ export class ExpressGraphQLScanner {
     const absolutePath = path.resolve(sourcePath);
     if (!fs.existsSync(absolutePath)) return [];
 
-    const graphql = this.loadGraphqlPackage(absolutePath);
+    const parser = this.hasGraphqlPackage(absolutePath) ? 'graphql' : 'regex';
     const found: { file: string; operations: ExpressGraphQLOperation[]; parser: 'graphql' | 'regex' }[] = [];
 
     for (const file of this.collectFiles(absolutePath)) {
@@ -86,7 +86,7 @@ export class ExpressGraphQLScanner {
       const sdl = this.extractSdl(text, file);
       if (!sdl) continue;
 
-      const model = this.buildModel(sdl, graphql);
+      const model = this.buildModel(sdl, parser);
       const operations = this.operationsFrom(model);
       if (operations.length > 0) found.push({ file, operations, parser: model.parser });
     }
@@ -158,30 +158,19 @@ export class ExpressGraphQLScanner {
    * SDL → type registry (graphql package first, regex fallback)
    * ------------------------------------------------------------------ */
 
-  private static loadGraphqlPackage(fromDir: string): any | null {
+  private static hasGraphqlPackage(fromDir: string): boolean {
     let dir = fromDir;
     for (let i = 0; i < 6; i++) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        return require(require.resolve('graphql', { paths: [dir] }));
-      } catch {
-        const parent = path.dirname(dir);
-        if (parent === dir) break;
-        dir = parent;
-      }
+      if (fs.existsSync(path.join(dir, 'node_modules', 'graphql', 'package.json'))) return true;
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
     }
-    return null;
+    return false;
   }
 
-  private static buildModel(sdl: string, graphql: any | null): SdlModel {
-    if (graphql) {
-      try {
-        return this.modelFromAst(graphql.parse(sdl, { noLocation: true }), graphql);
-      } catch {
-        /* syntax error or unsupported feature — fall back to the regex parser */
-      }
-    }
-    return this.modelFromRegex(sdl);
+  private static buildModel(sdl: string, parser: 'graphql' | 'regex'): SdlModel {
+    return this.modelFromRegex(sdl, parser);
   }
 
   private static emptyModel(parser: 'graphql' | 'regex'): SdlModel {
@@ -240,10 +229,13 @@ export class ExpressGraphQLScanner {
     return model;
   }
 
-  private static modelFromRegex(rawSdl: string): SdlModel {
-    const model = this.emptyModel('regex');
-    // Strip block/inline descriptions and # comments so they cannot confuse the field regex.
-    const sdl = rawSdl.replace(/"""[\s\S]*?"""/g, '').replace(/"[^"\n]*"/g, '').replace(/#[^\n]*/g, '');
+  private static modelFromRegex(rawSdl: string, parser: 'graphql' | 'regex' = 'regex'): SdlModel {
+    const model = this.emptyModel(parser);
+    const sdl = rawSdl.replace(/#[^\n]*/g, '');
+    const descriptionBefore = (text: string, index: number): string | undefined => {
+      const match = /(?:"""([\s\S]*?)"""|"([^"\n]*)")\s*$/.exec(text.slice(0, index));
+      return match ? (match[1] ?? match[2]).trim() : undefined;
+    };
 
     const schemaBlock = /schema\s*\{([^}]*)\}/.exec(sdl);
     if (schemaBlock) {
@@ -256,7 +248,9 @@ export class ExpressGraphQLScanner {
       const kind = m[1] === 'type' ? 'object' : (m[1] as TypeDef['kind']);
       const name = m[2];
       const body = m[3];
-      const def = model.types.get(name) || { kind, name, fields: [], enumValues: [], unionMembers: [] };
+      const description = descriptionBefore(sdl, m.index);
+      const def = model.types.get(name) || { kind, name, description, fields: [], enumValues: [], unionMembers: [] };
+      if (description && !def.description) def.description = description;
       model.types.set(name, def);
 
       if (kind === 'enum') {
@@ -271,7 +265,7 @@ export class ExpressGraphQLScanner {
           const am = /(\w+)\s*:\s*([\w[\]!]+)(?:\s*=\s*(.+))?/.exec(a);
           return am ? { name: am[1], type: am[2], defaultValue: am[3] ? am[3].trim() : undefined } : null;
         }).filter(Boolean) as FieldDef['args'];
-        def.fields.push({ name: f[1], type: f[3], args });
+        def.fields.push({ name: f[1], type: f[3], description: descriptionBefore(body, f.index), args });
       }
     }
 

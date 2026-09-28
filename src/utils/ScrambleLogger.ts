@@ -1,6 +1,16 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
 export type LogLevel = 'silent' | 'error' | 'warn' | 'info' | 'debug';
 
+export function sanitizeLogValue(value: unknown): string {
+  return Array.from(String(value), (char) => {
+    if (char === '\n') return '\\n';
+    if (char === '\r') return '\\r';
+    if (char === '\t') return '\\t';
+    const code = char.charCodeAt(0);
+    return code < 32 || (code >= 127 && code <= 159) ? '' : char;
+  }).join('');
+}
+
 /** The subset of the NestJS `Logger` surface this wrapper uses. */
 interface LoggerLike {
   log(message: string): void;

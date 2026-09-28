@@ -245,6 +245,30 @@ describe('runScenario', () => {
     expect(result.steps[0].failures[0]).toContain('did not match');
   });
 
+  it('rejects request URLs that leave the configured origin', async () => {
+    const scenario: Scenario = {
+      name: 'SSRF guard',
+      baseUrl: 'http://api.test',
+      steps: [{ name: 'escape', request: { method: 'GET', path: 'http://169.254.169.254/latest/meta-data' } }],
+    };
+    const impl = jest.fn();
+
+    const result = await runScenario(scenario, { fetchImpl: impl });
+    expect(result.steps[0].failures).toContain('request failed: Scenario request URLs must stay on the configured baseUrl origin.');
+    expect(impl).not.toHaveBeenCalled();
+  });
+
+  it('sanitizes terminal control characters in reports', () => {
+    const text = formatScenarioResult({
+      name: 'unsafe\nname',
+      passed: false,
+      steps: [{ name: '\u001b[31mstep', passed: false, failures: ['bad\rvalue'], ms: 1 }],
+    });
+    expect(text).toContain('unsafe\\nname');
+    expect(text).not.toContain('\u001b');
+    expect(text).toContain('bad\\rvalue');
+  });
+
   it('renders a readable report', async () => {
     const { impl } = fakeFetch({
       'POST http://api.test/auth/login': {

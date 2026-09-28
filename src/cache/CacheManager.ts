@@ -271,6 +271,10 @@ export class CacheManager {
    */
   private trackHashCollision(hash: string): void {
     const count = this.hashCollisions.get(hash) || 0;
+    if (!this.hashCollisions.has(hash) && this.hashCollisions.size >= 10000) {
+      const oldest = this.hashCollisions.keys().next().value;
+      if (oldest !== undefined) this.hashCollisions.delete(oldest);
+    }
     this.hashCollisions.set(hash, count + 1);
     
     if (count >= 3) {

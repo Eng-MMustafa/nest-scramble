@@ -88,6 +88,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       <label class="auth-field"><span>Variables <span class="dim">(KEY=value, one per line — use {{KEY}} anywhere)</span></span>
         <textarea id="env-vars" rows="4" placeholder="userId=42&#10;token=abc" spellcheck="false"></textarea>
       </label>
+      <label class="auth-field"><span><input id="env-credentials" type="checkbox" /> Send inherited authorization to this origin</span></label>
       <div class="env-actions">
         <button type="button" class="btn-add" id="env-save">Save</button>
         <button type="button" class="btn-add" id="env-new">New</button>
@@ -509,6 +510,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
           byId('env-name').value = env.name;
           byId('env-base').value = env.baseUrl || '';
           byId('env-vars').value = varsText(env.vars);
+          byId('env-credentials').checked = env.allowCredentials === true;
           byId('env-delete').hidden = false;
           renderEnvList();
         });
@@ -540,6 +542,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
         byId('env-name').value = '';
         byId('env-base').value = '';
         byId('env-vars').value = '';
+        byId('env-credentials').checked = false;
         byId('env-delete').hidden = true;
         renderEnvList();
       });
@@ -548,7 +551,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
         var name = byId('env-name').value.trim();
         if (!name) return;
         var envs = getEnvs().filter(function (env) { return env.name !== envEditing && env.name !== name; });
-        envs.push({ name: name, baseUrl: byId('env-base').value.trim(), vars: parseVars(byId('env-vars').value) });
+        envs.push({ name: name, baseUrl: byId('env-base').value.trim(), vars: parseVars(byId('env-vars').value), allowCredentials: byId('env-credentials').checked });
         saveEnvs(envs);
         store('scramble-env-active', name);
         envEditing = name;
@@ -565,6 +568,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
         byId('env-name').value = '';
         byId('env-base').value = '';
         byId('env-vars').value = '';
+        byId('env-credentials').checked = false;
         byId('env-delete').hidden = true;
         renderEnvSelect();
         renderEnvList();
@@ -1528,8 +1532,6 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
         }
       });
 
-      applyEffectiveAuth(headers);
-
       var body = null;
       var form = null;
       var bodyEditor = byId('body-editor');
@@ -1583,6 +1585,13 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       var base = (env && env.baseUrl) || specBase || location.origin;
       if (base && url.indexOf('http') !== 0) {
         url = base.replace(/\\/+$/, '') + url;
+      }
+      var targetOrigin = '';
+      var specOrigin = '';
+      try { targetOrigin = new URL(url, location.href).origin; } catch (e) { /* invalid URL is handled by fetch */ }
+      try { specOrigin = specBase ? new URL(specBase, location.href).origin : ''; } catch (e) { /* no trusted spec origin */ }
+      if (targetOrigin === location.origin || targetOrigin === specOrigin || (env && env.allowCredentials === true)) {
+        applyEffectiveAuth(headers);
       }
       Object.keys(headers).forEach(function (key) { headers[key] = applyVars(headers[key]); });
       if (body && typeof body === 'string') body = applyVars(body);
@@ -1882,7 +1891,7 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
             '<span class="mock-badge" title="Generated from the OpenAPI document, not from a server">MOCK</span>' +
             '<span class="meta-item">' + ms + ' ms</span>';
           bodyEl.innerHTML =
-            '<div class="mock-note">' + unreachableMessage(req.url) + ' Showing a response generated from the documented schema.</div>' +
+            '<div class="mock-note">' + esc(unreachableMessage(req.url)) + ' Showing a response generated from the documented schema.</div>' +
             (mock.body === undefined ? '' : '<pre class="code resp-code">' + hljson(lastResponseText) + '</pre>');
           byId('resp-headers').innerHTML = '<div class="kv-table kv-resp"><div class="kv-row"><span class="kv-key">x-scramble-mock</span><span class="kv-fixed">true</span></div></div>';
           byId('copy-resp').hidden = mock.body === undefined;
@@ -1950,16 +1959,27 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
     }
 
     function decodeShare(encoded) {
+      if (!encoded || encoded.length > 100000) return null;
       try {
         var b64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
-        return JSON.parse(decodeURIComponent(escape(atob(b64))));
+        var value = JSON.parse(decodeURIComponent(escape(atob(b64))));
+        return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
       } catch (e) { return null; }
+    }
+
+    function safeSharedUrl(value) {
+      if (typeof value !== 'string' || value.length > 2048) return '';
+      try {
+        var parsed = new URL(value, location.href);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? value : '';
+      } catch (e) { return ''; }
     }
 
     /** Restores a teammate's shared request state after the op is selected. */
     function applyShared(state) {
-      if (state.u) byId('url-input').value = state.u;
-      if (state.b) {
+      var sharedUrl = safeSharedUrl(state.u);
+      if (sharedUrl) byId('url-input').value = sharedUrl;
+      if (typeof state.b === 'string' && state.b.length <= 1000000) {
         var editor = byId('body-editor');
         if (editor) {
           bodyMode = 'raw';
@@ -2140,7 +2160,16 @@ export function renderScrambleDocsUi(options: ScrambleDocsUiOptions): string {
       // Only the origin matters: a namespaced URL like http://host:3000/orders
       // must still fetch http://host:3000/socket.io/socket.io.js.
       var origin = location.origin;
-      try { origin = new URL(backendUrl, location.href).origin; } catch (e) { /* keep docs origin */ }
+      try { origin = new URL(backendUrl, location.href).origin; } catch (e) { return callback(null); }
+      var specBase = spec && spec.servers && spec.servers[0] && spec.servers[0].url;
+      var specOrigin = '';
+      try { specOrigin = specBase ? new URL(specBase, location.href).origin : ''; } catch (e) { /* no trusted spec origin */ }
+      var env = activeEnv();
+      var envOrigin = '';
+      try { envOrigin = env && env.baseUrl ? new URL(env.baseUrl, location.href).origin : ''; } catch (e) { /* invalid environment URL */ }
+      if (origin !== location.origin && origin !== specOrigin && !(env && env.allowCredentials === true && origin === envOrigin)) {
+        return callback(null);
+      }
       var script = document.createElement('script');
       script.src = origin + '/socket.io/socket.io.js';
       script.onload = function () { callback(window.io || null); };

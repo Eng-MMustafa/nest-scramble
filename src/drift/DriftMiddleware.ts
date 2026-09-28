@@ -25,6 +25,7 @@ const IGNORED_PREFIXES = ['/docs', '/scramble-mock', '/favicon'];
 export class DriftMiddleware implements NestMiddleware {
   /** One log line per unique (route, issue) pair for the process lifetime. */
   private readonly reported = new Set<string>();
+  private readonly reportedOrder: string[] = [];
   /** Recent findings, newest first, bounded. */
   static readonly findings: DriftFinding[] = [];
 
@@ -103,6 +104,10 @@ export class DriftMiddleware implements NestMiddleware {
       const signature = `${method} ${path} ${res.statusCode} ${issue.kind} ${issue.location}`;
       if (this.reported.has(signature)) return false;
       this.reported.add(signature);
+      this.reportedOrder.push(signature);
+      if (this.reportedOrder.length > 1000) {
+        this.reported.delete(this.reportedOrder.shift()!);
+      }
       return true;
     });
     if (fresh.length === 0) return;

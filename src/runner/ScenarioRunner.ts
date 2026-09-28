@@ -1,5 +1,6 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
 import { compareWithSchema, matchSpecPath } from '../drift/DriftDetector';
+import { sanitizeLogValue } from '../utils/ScrambleLogger';
 
 /**
  * Declarative API test scenarios: a chain of requests where each step can
@@ -159,6 +160,10 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
   }
 
   const baseUrl = (options.baseUrl || scenario.baseUrl || 'http://localhost:3000').replace(/\/+$/, '');
+  const configuredOrigin = new URL(baseUrl);
+  if (!['http:', 'https:'].includes(configuredOrigin.protocol) || configuredOrigin.username || configuredOrigin.password) {
+    throw new Error('Scenario baseUrl must be an HTTP(S) URL without embedded credentials.');
+  }
   const vars: Record<string, string> = Object.create(null);
   for (const [key, value] of Object.entries(scenario.vars || {})) {
     if (!DANGEROUS_KEYS.has(key)) {
@@ -174,14 +179,18 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
 
     try {
       const path = fillVars(step.request.path, vars);
-      const url = path.startsWith('http') ? path : baseUrl + path;
+      const target = new URL(path, baseUrl + '/');
+      if (target.origin !== configuredOrigin.origin || target.username || target.password) {
+        throw new Error('Scenario request URLs must stay on the configured baseUrl origin.');
+      }
+      const url = target.href;
       const headers: Record<string, string> = {};
       for (const key of Object.keys(step.request.headers || {})) {
         if (DANGEROUS_KEYS.has(key)) continue;
         headers[key] = fillVars(step.request.headers![key], vars);
       }
 
-      const init: any = { method: step.request.method.toUpperCase(), headers };
+      const init: any = { method: step.request.method.toUpperCase(), headers, redirect: 'error' };
       if (step.request.body !== undefined) {
         headers['Content-Type'] = headers['Content-Type'] || 'application/json';
         init.body = JSON.stringify(fillVarsDeep(step.request.body, vars));
@@ -272,13 +281,13 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
 export function formatScenarioResult(result: ScenarioResult): string {
   const lines: string[] = [];
   const icon = result.passed ? '✅' : '❌';
-  lines.push(`${icon} ${result.name}`);
+  lines.push(`${icon} ${sanitizeLogValue(result.name)}`);
 
   for (const step of result.steps) {
     const mark = step.passed ? '✓' : '✖';
-    lines.push(`   ${mark} ${step.name} (${step.status ?? '—'}, ${step.ms} ms)`);
+    lines.push(`   ${mark} ${sanitizeLogValue(step.name)} (${step.status ?? '—'}, ${step.ms} ms)`);
     for (const failure of step.failures) {
-      lines.push(`       ${failure}`);
+      lines.push(`       ${sanitizeLogValue(failure)}`);
     }
   }
 

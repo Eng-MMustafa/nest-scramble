@@ -117,6 +117,22 @@ describe('ExpressGraphQLScanner', () => {
     expect(resolver.operations.find((o) => o.name === 'posts')!.summary).toBe('All posts, newest first');
   });
 
+  it('does not execute code from the scanned project dependency tree', () => {
+    const root = makeProject({
+      'src/graphql/schema.js': `module.exports = buildSchema(\`${RICH_SDL}\`);`,
+      'node_modules/graphql/package.json': JSON.stringify({ name: 'graphql', main: 'index.js' }),
+      'node_modules/graphql/index.js': `require('fs').writeFileSync(${JSON.stringify(path.join(os.tmpdir(), 'scramble-gql-executed'))}, 'executed');`,
+    });
+    roots.push(root);
+    const marker = path.join(os.tmpdir(), 'scramble-gql-executed');
+    fs.rmSync(marker, { force: true });
+
+    const [resolver] = ExpressGraphQLScanner.scan(path.join(root, 'src'));
+    expect(resolver.parser).toBe('graphql');
+    expectRichModel(resolver.operations);
+    expect(fs.existsSync(marker)).toBe(false);
+  });
+
   it('falls back to the regex parser and still builds the same model', () => {
     const root = makeProject({
       'src/graphql/typeDefs.ts': `

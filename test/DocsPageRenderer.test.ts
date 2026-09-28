@@ -1,3 +1,7 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { StaticDocsExporter } from '../src/standalone/StaticDocsExporter';
 import {
   escapeHtml,
   renderDocsPage,
@@ -103,6 +107,19 @@ describe('renderDocsPage (built-in UI, default)', () => {
     expect(html).toContain('data-tab="body"');
     expect(html).toContain('id="search"');
   });
+
+  it('requires explicit environment opt-in before inherited credentials cross origins', () => {
+    const html = renderDocsPage({ specUrl: '/docs-json' });
+    expect(html).toContain('id="env-credentials"');
+    expect(html).toContain('env.allowCredentials === true');
+    expect(html).toContain('targetOrigin === location.origin || targetOrigin === specOrigin');
+  });
+
+  it('validates shared URLs and escapes network-error messages', () => {
+    const html = renderDocsPage({ specUrl: '/docs-json' });
+    expect(html).toContain("parsed.protocol === 'http:' || parsed.protocol === 'https:'");
+    expect(html).toContain("esc(unreachableMessage(req.url))");
+  });
 });
 
 describe('renderDocsPage (Scalar opt-in)', () => {
@@ -188,5 +205,31 @@ describe('renderDocsPage (shared behaviour)', () => {
     const html = renderDocsPage({ specUrl: '/docs-json' });
     expect(html.startsWith('<!DOCTYPE html>')).toBe(true);
     expect(html.trimEnd().endsWith('</html>')).toBe(true);
+  });
+});
+
+describe('StaticDocsExporter security', () => {
+  it('redacts absolute source paths from public artifacts', () => {
+    const html = StaticDocsExporter.render({
+      spec: { openapi: '3.0.0', paths: {}, filePath: path.resolve('private', 'controller.ts') },
+      graphqlDocument: { resolvers: [{ filePath: path.resolve('private', 'schema.ts') }] },
+    });
+    expect(html).not.toContain(path.resolve('private'));
+    expect(html).toContain('controller.ts');
+    expect(html).toContain('schema.ts');
+  });
+
+  it('rejects a symlink output directory', () => {
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'scramble-export-'));
+    const target = path.join(parent, 'target');
+    const link = path.join(parent, 'link');
+    fs.mkdirSync(target);
+    fs.symlinkSync(target, link, process.platform === 'win32' ? 'junction' : 'dir');
+    try {
+      expect(() => StaticDocsExporter.write(link, { spec: { openapi: '3.0.0', paths: {} } }))
+        .toThrow(/must not be a symbolic link/);
+    } finally {
+      fs.rmSync(parent, { recursive: true, force: true });
+    }
   });
 });
