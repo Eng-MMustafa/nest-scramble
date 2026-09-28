@@ -15,62 +15,46 @@ async function demonstrateHashCollisionDetection() {
   console.log('🔐 Hash Collision Detection & Prevention Demo');
   console.log('='.repeat(70) + '\n');
 
-  // Example 1: MD5 vs SHA-256 comparison
-  console.log('📋 Example 1: Hash Algorithm Comparison');
+  // Example 1: SHA-256 hashing
+  console.log('📋 Example 1: SHA-256 Hashing');
   console.log('-'.repeat(70));
 
   const testFile = __filename;
-  
-  const md5Start = Date.now();
-  const md5Hash = CacheManager.calculateFileHash(testFile, 'md5');
-  const md5Time = Date.now() - md5Start;
-
   const sha256Start = Date.now();
-  const sha256Hash = CacheManager.calculateFileHash(testFile, 'sha256');
+  const sha256Hash = CacheManager.calculateFileHash(testFile);
   const sha256Time = Date.now() - sha256Start;
 
   console.log(`\nFile: ${path.basename(testFile)}`);
   console.log(`Size: ${(CacheManager.getFileSize(testFile) / 1024).toFixed(2)} KB`);
-  console.log(`\nMD5 Hash:    ${md5Hash}`);
-  console.log(`Time:        ${md5Time}ms`);
   console.log(`\nSHA-256 Hash: ${sha256Hash}`);
   console.log(`Time:         ${sha256Time}ms`);
-  console.log(`\nSpeed difference: ${sha256Time - md5Time}ms (SHA-256 is ${((sha256Time / md5Time) * 100 - 100).toFixed(1)}% slower)`);
 
   // Example 2: Multi-layer verification
   console.log('\n\n📋 Example 2: Multi-Layer Verification System');
   console.log('-'.repeat(70));
 
   console.log('\nVerification Layers:');
-  console.log('  1️⃣  Primary: Hash comparison (MD5 or SHA-256)');
+  console.log('  1️⃣  Primary: SHA-256 hash comparison');
   console.log('  2️⃣  Secondary: File size verification');
   console.log('  3️⃣  Fallback: Collision tracking & alerting');
 
   console.log('\n✅ Benefits:');
-  console.log('  • Fast: MD5 is ~2-3x faster than SHA-256');
-  console.log('  • Safe: File size catches hash collisions');
+  console.log('  • Secure: SHA-256 provides strong collision resistance');
+  console.log('  • Safe: File size catches unexpected mismatches');
   console.log('  • Smart: Auto-alerts on repeated collisions');
 
-  // Example 3: Cache with different algorithms
-  console.log('\n\n📋 Example 3: Using Different Hash Algorithms');
+  // Example 3: Secure cache configuration
+  console.log('\n\n📋 Example 3: Secure Cache Configuration');
   console.log('-'.repeat(70));
 
-  // MD5 Cache (faster, for development)
-  const md5Cache = new CacheManager({
-    cacheFilePath: 'test-md5-cache.json',
-    hashAlgorithm: 'md5',
-  });
-
-  // SHA-256 Cache (more secure, for production/large projects)
   const sha256Cache = new CacheManager({
     cacheFilePath: 'test-sha256-cache.json',
     hashAlgorithm: 'sha256',
   });
 
   console.log('\n💡 Recommendation:');
-  console.log('  • Small/Medium projects (<1000 files): Use MD5 (default)');
-  console.log('  • Large projects (>1000 files): Use SHA-256');
-  console.log('  • Monorepos with 10k+ files: Use SHA-256 + file size');
+  console.log('  • All projects use SHA-256 by default');
+  console.log('  • File-size verification provides an additional integrity check');
 
   // Example 4: Collision detection in action
   console.log('\n\n📋 Example 4: Collision Detection Simulation');
@@ -136,7 +120,6 @@ async function demonstrateHashCollisionDetection() {
 
   // Cleanup test files
   const testFiles = [
-    'test-md5-cache.json',
     'test-sha256-cache.json',
     'test-collision-cache.json',
   ];

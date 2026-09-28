@@ -66,7 +66,7 @@ export interface NestScrambleOptions {
   useIncrementalScanning?: boolean;
   cacheFilePath?: string;
   /** @default 'sha256' */
-  hashAlgorithm?: 'md5' | 'sha256';
+  hashAlgorithm?: 'sha256';
   cacheTtl?: number;
   skipDependencyTracking?: boolean;
   /**

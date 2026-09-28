@@ -29,7 +29,7 @@ export interface ScanOptions {
   useCache?: boolean;
   cacheFilePath?: string;
   skipDependencyTracking?: boolean;
-  hashAlgorithm?: 'md5' | 'sha256';
+  hashAlgorithm?: 'sha256';
   cacheTtl?: number;
 }
 
@@ -50,7 +50,7 @@ export class IncrementalScannerService {
     this.cacheManager = new CacheManager({
       enabled: options.useCache !== false,
       cacheFilePath: options.cacheFilePath,
-      hashAlgorithm: options.hashAlgorithm || 'md5',
+      hashAlgorithm: options.hashAlgorithm || 'sha256',
       ttl: options.cacheTtl,
     });
   }

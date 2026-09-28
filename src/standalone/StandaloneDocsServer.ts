@@ -388,11 +388,12 @@ export class StandaloneDocsServer {
 
     const platform = process.platform;
     if (platform === 'win32') {
-      execFile('cmd', ['/c', 'start', '', url]);
+      const executable = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'rundll32.exe');
+      execFile(executable, ['url.dll,FileProtocolHandler', url], () => undefined);
     } else if (platform === 'darwin') {
-      execFile('open', [url]);
+      execFile('/usr/bin/open', [url], () => undefined);
     } else {
-      execFile('xdg-open', [url]);
+      execFile('/usr/bin/xdg-open', [url], () => undefined);
     }
   }
 }

@@ -20,10 +20,12 @@ interface PackedFile {
 
 /** Asks npm exactly which files a publish would upload. */
 function packedFiles(): PackedFile[] {
-  const raw = execFileSync('npm', ['pack', '--dry-run', '--json'], {
+  const npmCli = process.env.npm_execpath;
+  if (!npmCli) throw new Error('npm_execpath is required to inspect the package manifest');
+
+  const raw = execFileSync(process.execPath, [npmCli, 'pack', '--dry-run', '--json'], {
     cwd: ROOT,
     encoding: 'utf-8',
-    shell: process.platform === 'win32',
   });
 
   return JSON.parse(raw)[0].files as PackedFile[];

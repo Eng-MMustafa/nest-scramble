@@ -32,7 +32,7 @@ export interface CacheOptions {
   cacheFilePath?: string;
   enabled?: boolean;
   ttl?: number;
-  hashAlgorithm?: 'md5' | 'sha256';
+  hashAlgorithm?: 'sha256';
 }
 
 /**
@@ -60,7 +60,7 @@ export class CacheManager {
   private cacheFilePath: string;
   private enabled: boolean;
   private ttl: number;
-  private hashAlgorithm: 'md5' | 'sha256';
+  private hashAlgorithm: 'sha256';
   private metadata: CacheMetadata;
   private hashCollisions: Map<string, number> = new Map();
 
@@ -69,7 +69,7 @@ export class CacheManager {
       path.join(process.cwd(), CacheManager.DEFAULT_CACHE_FILE);
     this.enabled = options.enabled !== false;
     this.ttl = options.ttl || 24 * 60 * 60 * 1000; // 24 hours default
-    this.hashAlgorithm = options.hashAlgorithm || 'md5';
+    this.hashAlgorithm = options.hashAlgorithm || 'sha256';
     
     this.metadata = {
       version: CacheManager.CACHE_VERSION,
@@ -280,12 +280,12 @@ export class CacheManager {
   }
 
   /**
-   * Calculate file hash using MD5 or SHA-256
+   * Calculate file hash using SHA-256
    */
-  static calculateFileHash(filePath: string, algorithm: 'md5' | 'sha256' = 'md5'): string {
+  static calculateFileHash(filePath: string): string {
     try {
       const content = fs.readFileSync(filePath, 'utf-8');
-      return crypto.createHash(algorithm).update(content).digest('hex');
+      return crypto.createHash('sha256').update(content).digest('hex');
     } catch (error) {
       ScrambleLogger.error(`[CacheManager] Error calculating hash for ${filePath}:`, error);
       return '';
@@ -296,7 +296,7 @@ export class CacheManager {
    * Calculate file hash with the instance's configured algorithm
    */
   calculateHash(filePath: string): string {
-    return CacheManager.calculateFileHash(filePath, this.hashAlgorithm);
+    return CacheManager.calculateFileHash(filePath);
   }
 
   /**

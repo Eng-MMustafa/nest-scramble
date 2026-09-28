@@ -50,6 +50,16 @@ describe('CacheManager', () => {
     fs.rmSync(path.dirname(cacheFile), { recursive: true, force: true });
   });
 
+  describe('hashing', () => {
+    it('uses SHA-256 for cache fingerprints', () => {
+      fs.writeFileSync(cacheFile, 'cache fingerprint input');
+
+      const manager = new CacheManager({ cacheFilePath: cacheFile });
+      expect(manager.calculateHash(cacheFile)).toMatch(/^[a-f0-9]{64}$/);
+      expect(manager.getStats().hashAlgorithm).toBe('sha256');
+    });
+  });
+
   describe('version invalidation', () => {
     it('stamps the cache with the installed library version', () => {
       const manager = new CacheManager({ cacheFilePath: cacheFile });
