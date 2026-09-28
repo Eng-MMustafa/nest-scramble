@@ -162,31 +162,28 @@ jobs:
           fi
           echo "Tag and package agree on $PKG" >> "$GITHUB_STEP_SUMMARY"
 
-  # SonarCloud GitHub Actions job is ready in sonar-project.properties.
-  # Uncomment and enable this job after adding the SONAR_TOKEN repository secret
-  # and turning off "Automatic analysis" in SonarCloud project settings.
-  # sonarcloud:
-  #   name: SonarCloud analysis
-  #   runs-on: ubuntu-latest
-  #   needs: [test]
-  #
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 0
-  #         persist-credentials: false
-  #
-  #     - uses: actions/setup-node@v4
-  #       with:
-  #         node-version: 20.x
-  #         cache: npm
-  #
-  #     - run: npm ci --ignore-scripts
-  #     - run: npm run build
-  #     - run: npx jest --coverage --coverageReporters=lcov
-  #
-  #     - name: SonarCloud Scan
-  #       uses: SonarSource/sonarcloud-github-action@master
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  sonarcloud:
+    name: SonarCloud analysis
+    runs-on: ubuntu-latest
+    needs: [test]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: npx jest --coverage --coverageReporters=lcov
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
