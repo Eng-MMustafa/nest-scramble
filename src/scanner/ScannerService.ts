@@ -12,6 +12,7 @@ import {
 import { AnalyzedType, DtoAnalyzer } from '../utils/DtoAnalyzer';
 import { extractFileFields, fallbackFileField, FileFieldInfo } from '../utils/FileUploadExtractor';
 import { extractThrownErrors, ThrownErrorInfo } from '../utils/ThrownErrorExtractor';
+import { extractApiOperationMetadata, extractApiTags } from '../utils/SwaggerDecoratorExtractor';
 import { ScrambleLogger } from '../utils/ScrambleLogger';
 
 /**
@@ -26,6 +27,23 @@ export function resolveSourcePath(sourcePath: string, cwd: string = process.cwd(
   return path.isAbsolute(sourcePath) ? sourcePath : path.join(cwd, sourcePath);
 }
 
+/**
+ * Throws when a relative source path attempts to escape the working directory.
+ * Absolute paths are accepted as-is; they are assumed to be intentional.
+ */
+export function assertSafeSourcePath(sourcePath: string, cwd: string = process.cwd()): void {
+  if (path.isAbsolute(sourcePath)) return;
+
+  const resolved = path.resolve(cwd, sourcePath);
+  const normalizedCwd = path.resolve(cwd);
+  const relative = path.relative(normalizedCwd, resolved);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(
+      `Source path "${sourcePath}" resolves outside the working directory. Use an absolute path if you really want to scan there.`,
+    );
+  }
+}
+
 export interface ControllerInfo {
   name: string;
   path: string;
@@ -34,6 +52,8 @@ export interface ControllerInfo {
   version?: string | string[];
   guardTypes?: string[];
   isPublic?: boolean;
+  /** Tags from `@ApiTags('...')`, if any. */
+  tags?: string[];
 }
 
 export interface MethodInfo {
@@ -208,6 +228,7 @@ export class ScannerService {
     const guardTypes = this.extractGuardTypes(cls);
     const hasGuards = guardTypes.length > 0;
     const isPublic = this.isPublicDecorator(cls);
+    const tags = extractApiTags(cls);
 
     const methods: MethodInfo[] = [];
 
@@ -227,6 +248,7 @@ export class ScannerService {
       version,
       guardTypes,
       isPublic,
+      tags,
     };
   }
 
@@ -465,7 +487,11 @@ export class ScannerService {
 
     const returnType = analyzer.analyzeType(analyzer.returnTypeOf(method));
     const httpCode = this.extractHttpCode(method);
-    const { summary, description, deprecated } = this.extractJsDoc(method);
+    const jsDoc = this.extractJsDoc(method);
+    const apiOp = extractApiOperationMetadata(method);
+    const summary = apiOp?.summary || jsDoc.summary;
+    const description = apiOp?.description || jsDoc.description;
+    const deprecated = jsDoc.deprecated;
 
     // The field name lives in the interceptor, not in `@UploadedFile()`.
     let fileFields = extractFileFields(method);

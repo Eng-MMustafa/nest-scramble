@@ -60,6 +60,40 @@ describe('containsSubset', () => {
   });
 });
 
+describe('prototype pollution resistance', () => {
+  it('ignores __proto__ segments in extractPath', () => {
+    const payload = { ok: true };
+    expect(extractPath(payload, '$.ok.__proto__.polluted')).toBeUndefined();
+  });
+
+  it('does not pollute Object.prototype via containsSubset', () => {
+    const before = (Object.prototype as any).polluted;
+    containsSubset({}, JSON.parse('{"__proto__": {"polluted": true}}'));
+    expect((Object.prototype as any).polluted).toBe(before);
+  });
+
+  it('does not capture into reserved variable names', async () => {
+    const { impl } = fakeFetch({
+      'POST http://api.test/auth/login': { status: 201, body: { accessToken: 'abc' } },
+    });
+    // JSON.parse is how real scenario files arrive; it creates an own __proto__ key.
+    const scenario = JSON.parse(`{
+      "name": "Bad capture name",
+      "baseUrl": "http://api.test",
+      "steps": [
+        {
+          "name": "login",
+          "request": { "method": "POST", "path": "/auth/login" },
+          "capture": { "__proto__": "$.accessToken" }
+        }
+      ]
+    }`) as Scenario;
+    const result = await runScenario(scenario, { fetchImpl: impl });
+    expect(result.steps[0].passed).toBe(false);
+    expect(result.steps[0].failures[0]).toContain('reserved variable name');
+  });
+});
+
 describe('runScenario', () => {
   const loginScenario: Scenario = {
     name: 'Auth flow',

@@ -2,6 +2,7 @@
 import * as ts from 'typescript';
 import { extractValidationConstraints, ValidationConstraints } from './ValidationExtractor';
 import { getJsDocInfo } from '../analysis/AstHelpers';
+import { extractApiPropertyMetadata } from './SwaggerDecoratorExtractor';
 
 export interface AnalyzedType {
   type: string;
@@ -12,6 +13,10 @@ export interface AnalyzedType {
   enumValues?: string[];
   /** OpenAPI format hint, e.g. `date-time` for JavaScript Date. */
   format?: string;
+  /** Example value from an `@ApiProperty({ example: ... })` decorator. */
+  example?: unknown;
+  /** Per-property description from an `@ApiProperty({ description: ... })` decorator. */
+  description?: string;
 }
 
 export interface PropertyInfo {
@@ -295,10 +300,40 @@ export class DtoAnalyzer {
       // Extract JSDoc description
       const description = decl ? getJsDocInfo(decl).description : undefined;
 
+      // Merge @ApiProperty hints when present. Swagger metadata is a fallback and
+      // enhancement: concrete TypeScript types win, but decorators provide
+      // descriptions, examples and type hints where the source code is loose.
+      const swaggerMeta = decl && ts.isPropertyDeclaration(decl)
+        ? extractApiPropertyMetadata(decl)
+        : undefined;
+
+      if (swaggerMeta?.description && !description) {
+        analyzedType.description = swaggerMeta.description;
+      }
+      if (swaggerMeta?.example !== undefined) {
+        analyzedType.example = swaggerMeta.example;
+      }
+      if (swaggerMeta?.format && !analyzedType.format) {
+        analyzedType.format = swaggerMeta.format;
+      }
+      if (swaggerMeta?.enum && !analyzedType.enumValues) {
+        analyzedType.enumValues = swaggerMeta.enum.map(String);
+      }
+      if (swaggerMeta?.swaggerType && analyzedType.type === 'any') {
+        analyzedType.type = swaggerMeta.swaggerType;
+      }
+      if (swaggerMeta?.required !== undefined && !synthesizedOptional) {
+        isOptional = !swaggerMeta.required;
+        analyzedType.isOptional = isOptional;
+      }
+      if (swaggerMeta?.nullable && !analyzedType.unionTypes) {
+        analyzedType.type = analyzedType.type || 'string';
+      }
+
       properties.push({
         name,
         type: analyzedType,
-        description,
+        description: swaggerMeta?.description || description,
         validation,
       });
     }

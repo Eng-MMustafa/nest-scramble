@@ -11,4 +11,12 @@ module.exports = {
   moduleFileExtensions: ['ts', 'js', 'json'],
   collectCoverageFrom: ['src/**/*.ts', '!src/examples/**', '!src/controllers/DemoController.ts'],
   coverageReporters: ['text', 'lcov'],
+  coverageThreshold: {
+    global: {
+      statements: 67,
+      branches: 59,
+      functions: 72,
+      lines: 70,
+    },
+  },
 };

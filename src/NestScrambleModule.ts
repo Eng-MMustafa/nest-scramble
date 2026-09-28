@@ -18,8 +18,41 @@ import * as fs from 'fs';
 
 export const MOCK_ROUTE_PREFIX = 'scramble-mock';
 
+/**
+ * Check whether the current process appears to be running in a production
+ * environment. We look at the standard NODE_ENV variable and also at common
+ * PaaS flags (Render, Railway, Heroku, AWS Lambda, etc.) so the defaults feel
+ * right regardless of how the app is deployed.
+ */
+function isProductionEnvironment(): boolean {
+  const env = process.env.NODE_ENV || '';
+  if (env === 'production') return true;
+  const paasFlags = ['RENDER', 'RAILWAY', 'HEROKU', 'AWS_LAMBDA_FUNCTION_NAME', 'FLY_APP_NAME'];
+  return paasFlags.some(flag => (process.env[flag] ?? '').length > 0);
+}
+
 export interface NestScrambleOptions {
   path?: string;
+  /**
+   * Enable the interactive docs UI and OpenAPI JSON endpoint.
+   *
+   * @default true in development, false in production (`NODE_ENV === 'production'`)
+   *
+   * In production the docs controller is **disabled by default** so that installing
+   * the module does not accidentally expose your API surface to the public internet.
+   * Set explicitly to `true` if you intentionally want docs reachable in production
+   * (for example behind your own auth guard or on an internal network).
+   */
+  enableDocs?: boolean;
+  /**
+   * Enable the spec-driven mock server at `/scramble-mock/*`.
+   *
+   * @default true in development, false in production (`NODE_ENV === 'production'`)
+   *
+   * The mock server is intended for local development and contract-first testing.
+   * It should not be left enabled in production unless you explicitly want to serve
+   * fabricated responses from the same process as your real API.
+   */
   enableMock?: boolean;
   autoExportPostman?: boolean;
   postmanOutputPath?: string;
@@ -32,37 +65,10 @@ export interface NestScrambleOptions {
   theme?: 'classic' | 'futuristic';
   useIncrementalScanning?: boolean;
   cacheFilePath?: string;
+  /** @default 'sha256' */
   hashAlgorithm?: 'md5' | 'sha256';
   cacheTtl?: number;
-  /**
-   * @deprecated Not implemented by the module and ignored. Watch mode works,
-   * but only through the programmatic `WatchModeService`, which regenerates
-   * artefacts outside the request lifecycle. Setting this here has no effect.
-   * @see WatchModeService
-   */
-  enableWatchMode?: boolean;
-  /**
-   * @deprecated Not implemented by the module and ignored. Pass `debounceMs`
-   * to `WatchModeService` instead.
-   * @see WatchModeService
-   */
-  watchDebounce?: number;
   skipDependencyTracking?: boolean;
-  /**
-   * @deprecated Not implemented and ignored. Choose the hash strength with
-   * `hashAlgorithm: 'sha256'` instead.
-   */
-  enableHashCollisionDetection?: boolean;
-  /**
-   * @deprecated Not implemented and ignored. The generated document contains
-   * no `securitySchemes`, so there is nothing for this to apply to.
-   */
-  defaultAuthType?: 'bearer' | 'apiKey' | 'none';
-  /**
-   * @deprecated Not implemented and ignored. To version the documented paths,
-   * pass the prefix you gave `app.setGlobalPrefix()` via `globalPrefix`.
-   */
-  enableApiVersioning?: boolean;
   /**
    * Opt-in: full URL of a Scalar standalone bundle. When set, the docs page
    * hosts the Scalar UI from that URL instead of the built-in zero-dependency
@@ -133,12 +139,18 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
     lines.push(`${gradient}┌${rule}┐${reset}`);
     lines.push(`${gradient}│${reset} ${cyan}${bold}✨ NEST-SCRAMBLE${reset} ${dim}by Mohamed Mustafa${reset}`);
     lines.push(`${gradient}│${reset}`);
-    lines.push(`${gradient}│${reset} ${green}●${reset} ${bold}Documentation${reset}  ${cyan}${baseUrl}${prefix}/${docsPath}${reset}`);
-    lines.push(`${gradient}│${reset} ${green}●${reset} ${bold}OpenAPI Spec${reset}   ${cyan}${baseUrl}${prefix}/${docsPath}-json${reset}`);
+    if (options.enableDocs !== false) {
+      lines.push(`${gradient}│${reset} ${green}●${reset} ${bold}Documentation${reset}  ${cyan}${baseUrl}${prefix}/${docsPath}${reset}`);
+      lines.push(`${gradient}│${reset} ${green}●${reset} ${bold}OpenAPI Spec${reset}   ${cyan}${baseUrl}${prefix}/${docsPath}-json${reset}`);
+    } else {
+      lines.push(`${gradient}│${reset} ${yellow}○${reset} ${bold}Documentation${reset}  ${dim}disabled in production (enableDocs: true to opt in)${reset}`);
+    }
     if (options.enableMock !== false) {
       lines.push(
         `${gradient}│${reset} ${green}●${reset} ${bold}Mock Server${reset}    ${cyan}${baseUrl}${prefix}/${MOCK_ROUTE_PREFIX}${reset}`,
       );
+    } else {
+      lines.push(`${gradient}│${reset} ${yellow}○${reset} ${bold}Mock Server${reset}    ${dim}disabled in production (enableMock: true to opt in)${reset}`);
     }
     lines.push(`${gradient}│${reset}`);
     lines.push(`${gradient}│${reset} ${yellow}📦${reset} Source      ${dim}${options.sourcePath}${reset}`);
@@ -154,39 +166,34 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
     ScrambleLogger.raw(lines);
   }
 
-  /**
-   * Options the module still accepts for backwards compatibility but does not
-   * act on. Kept as one list so the type, the warning and the test that guards
-   * against new dead options cannot drift apart.
-   */
-  static readonly IGNORED_OPTIONS: ReadonlyMap<keyof NestScrambleOptions, string> = new Map([
-    ['enableWatchMode', 'use the programmatic WatchModeService instead'],
-    ['watchDebounce', 'pass debounceMs to WatchModeService instead'],
-    ['enableHashCollisionDetection', "use hashAlgorithm: 'sha256' instead"],
-    ['defaultAuthType', 'the generated document declares no security schemes'],
-    ['enableApiVersioning', 'pass your app prefix via globalPrefix instead'],
-  ]);
-
-  /**
-   * An option that is accepted, type-checked and then ignored is worse than one
-   * that does not exist: the caller sees no effect and has no way to find out
-   * why. Saying so out loud costs one line at startup.
-   */
-  private static warnAboutIgnoredOptions(options: NestScrambleOptions): void {
-    for (const [option, advice] of NestScrambleModule.IGNORED_OPTIONS) {
-      if (options[option] !== undefined) {
-        ScrambleLogger.warn(`Option "${String(option)}" is not implemented and is ignored — ${advice}.`);
-      }
-    }
-  }
 
   static forRoot(options: NestScrambleOptions = {}): DynamicModule {
     // Auto-detect project structure
     const projectStructure = AutoDetector.detectProjectStructure();
+
+    // Secure-by-default: in production we disable docs and mock unless the
+    // caller explicitly opts in. This prevents an npm install from silently
+    // exposing the API surface (and an unauthenticated mock endpoint) to the
+    // public internet when the host app is deployed.
+    const isProduction = isProductionEnvironment();
+    const enableDocsDefault = options.enableDocs !== undefined ? options.enableDocs : !isProduction;
+    const enableMockDefault = options.enableMock !== undefined ? options.enableMock : !isProduction;
+
+    if (isProduction && options.enableDocs === undefined) {
+      ScrambleLogger.info(
+        'Running in production mode. Docs UI is disabled by default; pass enableDocs: true to opt in.',
+      );
+    }
+    if (isProduction && options.enableMock === undefined) {
+      ScrambleLogger.info(
+        'Running in production mode. Mock server is disabled by default; pass enableMock: true to opt in.',
+      );
+    }
     
     const config = {
       path: options.path || '/docs',
-      enableMock: options.enableMock !== undefined ? options.enableMock : true,
+      enableDocs: enableDocsDefault,
+      enableMock: enableMockDefault,
       autoExportPostman: options.autoExportPostman || false,
       postmanOutputPath: options.postmanOutputPath || 'collection.json',
       baseUrl: options.baseUrl || AutoDetector.detectBaseUrl(),
@@ -198,12 +205,9 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
       theme: options.theme || 'futuristic',
       useIncrementalScanning: options.useIncrementalScanning || false,
       cacheFilePath: options.cacheFilePath || 'scramble-cache.json',
-      hashAlgorithm: options.hashAlgorithm || 'md5',
+      hashAlgorithm: options.hashAlgorithm || 'sha256',
       cacheTtl: options.cacheTtl || 24 * 60 * 60 * 1000,
-      enableWatchMode: options.enableWatchMode || false,
-      watchDebounce: options.watchDebounce || 300,
       skipDependencyTracking: options.skipDependencyTracking || false,
-      enableHashCollisionDetection: options.enableHashCollisionDetection !== false,
       scalarUrl: options.scalarUrl,
       enableDriftDetection: options.enableDriftDetection || false,
       logLevel: options.logLevel || 'info',
@@ -211,7 +215,6 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
     };
 
     ScrambleLogger.configure(config.logLevel);
-    NestScrambleModule.warnAboutIgnoredOptions(options);
 
     NestScrambleModule.moduleOptions = config;
     NestScrambleModule.docsPath = normalizeDocsPath(config.path);
@@ -228,7 +231,7 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
       scanner = new IncrementalScannerService({
         useCache: true,
         cacheFilePath: config.cacheFilePath,
-        hashAlgorithm: config.hashAlgorithm || 'md5',
+        hashAlgorithm: config.hashAlgorithm,
         cacheTtl: config.cacheTtl,
         skipDependencyTracking: config.skipDependencyTracking,
       });
@@ -347,7 +350,10 @@ export class NestScrambleModule extends ConfigurableModuleClass implements OnMod
         PostmanCollectionGenerator,
         OpenApiTransformer,
       ],
-      controllers: [createDocsController({ path: config.path })],
+      // Only register the docs controller when the user has not disabled it.
+      // In production the docs UI is disabled by default unless explicitly
+      // opted in via enableDocs: true.
+      controllers: config.enableDocs !== false ? [createDocsController({ path: config.path })] : [],
     };
   }
 

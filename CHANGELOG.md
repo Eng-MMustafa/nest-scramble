@@ -6,9 +6,42 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
-## [5.8.1] - Unreleased
+## [6.0.0] - Unreleased
+
+### Security (breaking)
+- **Secure-by-default docs and mock server** — in `NODE_ENV=production` and on
+  common PaaS platforms (`RENDER`, `RAILWAY`, `HEROKU`, `AWS_LAMBDA_FUNCTION_NAME`,
+  `FLY_APP_NAME`) the `/docs` UI and `/scramble-mock` middleware are **disabled by
+  default**. Pass `enableDocs: true` / `enableMock: true` in `forRoot()` to opt in
+  explicitly. Startup logs now warn clearly when features are disabled for safety.
+- **Standalone proxy allowlist** — `npx nest-scramble serve` only forwards
+  "Try it" calls to loopback addresses by default (`localhost`, `127.0.0.1`,
+  `::1`). Use `--proxy-allow-hosts example.com,staging.example.com` to extend the
+  list. Unknown targets receive `403 Proxy refused` instead of being relayed.
+- **Per-feature on/off switches for standalone `serve`** — `--no-docs`,
+  `--no-proxy`, `--no-mock` let you choose exactly what the standalone server
+  exposes. Docs UI responses now include `X-Content-Type-Options: nosniff` and
+  `X-Frame-Options: DENY` by default.
+
+### Removed
+- **Dead configuration options cleaned up** — `enableWatchMode`,
+  `watchDebounce`, `enableHashCollisionDetection`, `defaultAuthType`, and
+  `enableApiVersioning` have been removed from `NestScrambleOptions`. Every
+  remaining option is now wired to real behavior; a test contract ensures the
+  interface and implementation stay in sync.
+
+### Changed
+- **Incremental cache hashing** now defaults to `sha256` instead of `md5`.
+- **Coverage thresholds** are now enforced in CI to prevent silent regressions
+  (current gate: statements ≥67%, branches ≥59%, functions ≥72%, lines ≥70%).
 
 ### Added
+- **`@nestjs/swagger` decorator hints** — the scanner reads `@ApiTags`,
+  `@ApiOperation({ summary, description })`, `@ApiProperty`, and
+  `@ApiPropertyOptional` from source text without requiring `@nestjs/swagger` as
+  a runtime dependency. Already-decorated projects now get descriptions, examples,
+  enums, formats, required/nullable overrides, and custom tag names in the
+  generated OpenAPI document.
 - **Mock fallback when the backend is unreachable** — if a REST or GraphQL
   "Try it" call fails at the network level (API down, not deployed yet, or
   CORS-blocked), the console answers from the documented example/schema and

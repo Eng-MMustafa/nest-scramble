@@ -54,43 +54,94 @@ runs:
     # this action must run after the usual `npm ci` step.
     - name: Documentation health
       shell: bash
+      env:
+        INPUT_SOURCE: ${{ inputs.source }}
+        INPUT_GLOBAL_PREFIX: ${{ inputs.global-prefix }}
+        INPUT_MIN_SCORE: ${{ inputs.min-score }}
+        INPUT_VERSION: ${{ inputs.version }}
       run: |
-        PREFIX_FLAG=""
-        if [ -n "${{ inputs.global-prefix }}" ]; then
-          PREFIX_FLAG="--globalPrefix ${{ inputs.global-prefix }}"
+        set -euo pipefail
+        case "$INPUT_SOURCE" in
+          /*|*..*) echo "Invalid source path: must be relative and not contain .." >&2; exit 1 ;;
+        esac
+        case "$INPUT_VERSION" in
+          latest|''|[0-9]*\.[0-9]*\.[0-9]*|[0-9]*\.[0-9]*\.[0-9]*-*) ;;
+          *) echo "Invalid version format" >&2; exit 1 ;;
+        esac
+
+        DOCTOR_ARGS=("$INPUT_SOURCE")
+        if [ -n "$INPUT_MIN_SCORE" ]; then
+          DOCTOR_ARGS+=(--min-score "$INPUT_MIN_SCORE")
         fi
-        npx --yes nest-scramble@${{ inputs.version }} doctor "${{ inputs.source }}" \
-          --min-score "${{ inputs.min-score }}" $PREFIX_FLAG
+        if [ -n "$INPUT_GLOBAL_PREFIX" ]; then
+          DOCTOR_ARGS+=(--globalPrefix "$INPUT_GLOBAL_PREFIX")
+        fi
+
+        npx --yes "nest-scramble@${INPUT_VERSION:-latest}" doctor "${DOCTOR_ARGS[@]}"
 
     - name: Breaking-change detection
       if: inputs.base-ref != ''
       shell: bash
+      env:
+        INPUT_SOURCE: ${{ inputs.source }}
+        INPUT_GLOBAL_PREFIX: ${{ inputs.global-prefix }}
+        INPUT_FAIL_ON_BREAKING: ${{ inputs.fail-on-breaking }}
+        INPUT_BASE_REF: ${{ inputs.base-ref }}
+        INPUT_VERSION: ${{ inputs.version }}
       run: |
-        git fetch origin "${{ inputs.base-ref }}" --depth=1
-        git worktree add --detach /tmp/nest-scramble-base "origin/${{ inputs.base-ref }}"
+        set -euo pipefail
+        case "$INPUT_SOURCE" in
+          /*|*..*) echo "Invalid source path: must be relative and not contain .." >&2; exit 1 ;;
+        esac
+        case "$INPUT_BASE_REF" in
+          *..*|*\\*|*$'\n'*) echo "Invalid base-ref" >&2; exit 1 ;;
+        esac
+        case "$INPUT_VERSION" in
+          latest|''|[0-9]*\.[0-9]*\.[0-9]*|[0-9]*\.[0-9]*\.[0-9]*-*) ;;
+          *) echo "Invalid version format" >&2; exit 1 ;;
+        esac
 
-        FLAGS=""
-        if [ "${{ inputs.fail-on-breaking }}" = "true" ]; then
-          FLAGS="--fail-on-breaking"
+        git fetch origin "$INPUT_BASE_REF" --depth=1
+        git worktree add --detach /tmp/nest-scramble-base "origin/$INPUT_BASE_REF"
+
+        FLAGS=()
+        if [ "$INPUT_FAIL_ON_BREAKING" = "true" ]; then
+          FLAGS+=(--fail-on-breaking)
         fi
-        if [ -n "${{ inputs.global-prefix }}" ]; then
-          FLAGS="$FLAGS --globalPrefix ${{ inputs.global-prefix }}"
+        if [ -n "$INPUT_GLOBAL_PREFIX" ]; then
+          FLAGS+=(--globalPrefix "$INPUT_GLOBAL_PREFIX")
         fi
 
-        npx --yes nest-scramble@${{ inputs.version }} diff \
-          "/tmp/nest-scramble-base/${{ inputs.source }}" "${{ inputs.source }}" $FLAGS
+        npx --yes "nest-scramble@${INPUT_VERSION:-latest}" diff \
+          "/tmp/nest-scramble-base/$INPUT_SOURCE" "$INPUT_SOURCE" "${FLAGS[@]}"
 
         git worktree remove --force /tmp/nest-scramble-base
 
     - name: Scenario tests
       if: inputs.scenarios != ''
       shell: bash
+      env:
+        INPUT_SOURCE: ${{ inputs.source }}
+        INPUT_GLOBAL_PREFIX: ${{ inputs.global-prefix }}
+        INPUT_SCENARIOS: ${{ inputs.scenarios }}
+        INPUT_BASE_URL: ${{ inputs.base-url }}
+        INPUT_VERSION: ${{ inputs.version }}
       run: |
-        FLAGS="--spec ${{ inputs.source }}"
-        if [ -n "${{ inputs.base-url }}" ]; then
-          FLAGS="$FLAGS --baseUrl ${{ inputs.base-url }}"
+        set -euo pipefail
+        case "$INPUT_SOURCE" in
+          /*|*..*) echo "Invalid source path: must be relative and not contain .." >&2; exit 1 ;;
+        esac
+        case "$INPUT_VERSION" in
+          latest|''|[0-9]*\.[0-9]*\.[0-9]*|[0-9]*\.[0-9]*\.[0-9]*-*) ;;
+          *) echo "Invalid version format" >&2; exit 1 ;;
+        esac
+
+        TEST_ARGS=(--spec "$INPUT_SOURCE")
+        if [ -n "$INPUT_BASE_URL" ]; then
+          TEST_ARGS+=(--baseUrl "$INPUT_BASE_URL")
         fi
-        if [ -n "${{ inputs.global-prefix }}" ]; then
-          FLAGS="$FLAGS --globalPrefix ${{ inputs.global-prefix }}"
+        if [ -n "$INPUT_GLOBAL_PREFIX" ]; then
+          TEST_ARGS+=(--globalPrefix "$INPUT_GLOBAL_PREFIX")
         fi
-        npx --yes nest-scramble@${{ inputs.version }} test "${{ inputs.scenarios }}" $FLAGS
+
+        npx --yes "nest-scramble@${INPUT_VERSION:-latest}" test "$INPUT_SCENARIOS" "${TEST_ARGS[@]}"

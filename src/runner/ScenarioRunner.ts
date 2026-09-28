@@ -67,12 +67,15 @@ export function fillVars(text: string, vars: Record<string, string>): string {
   );
 }
 
+const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 function fillVarsDeep(value: unknown, vars: Record<string, string>): unknown {
   if (typeof value === 'string') return fillVars(value, vars);
   if (Array.isArray(value)) return value.map(item => fillVarsDeep(item, vars));
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const key of Object.keys(value as Record<string, unknown>)) {
+      if (DANGEROUS_KEYS.has(key)) continue;
       out[key] = fillVarsDeep((value as Record<string, unknown>)[key], vars);
     }
     return out;
@@ -94,7 +97,9 @@ export function extractPath(payload: unknown, path: string): unknown {
     const match = /^([^[\]]*)((?:\[\d+\])*)$/.exec(rawSegment);
     if (!match) return undefined;
 
-    if (match[1]) node = node[match[1]];
+    const key = match[1];
+    if (key && DANGEROUS_KEYS.has(key)) continue;
+    if (key) node = node[key];
 
     const indexes = match[2].match(/\d+/g) || [];
     for (const index of indexes) {
@@ -136,6 +141,7 @@ export function containsSubset(actual: unknown, expected: unknown): string[] {
     }
 
     for (const key of Object.keys(expectedNode as Record<string, unknown>)) {
+      if (DANGEROUS_KEYS.has(key)) continue;
       walk(
         (actualNode as Record<string, unknown>)[key],
         (expectedNode as Record<string, unknown>)[key],
@@ -153,7 +159,12 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
   }
 
   const baseUrl = (options.baseUrl || scenario.baseUrl || 'http://localhost:3000').replace(/\/+$/, '');
-  const vars: Record<string, string> = { ...(scenario.vars || {}) };
+  const vars: Record<string, string> = Object.create(null);
+  for (const [key, value] of Object.entries(scenario.vars || {})) {
+    if (!DANGEROUS_KEYS.has(key)) {
+      vars[key] = value;
+    }
+  }
   const steps: StepResult[] = [];
 
   for (const step of scenario.steps) {
@@ -166,6 +177,7 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
       const url = path.startsWith('http') ? path : baseUrl + path;
       const headers: Record<string, string> = {};
       for (const key of Object.keys(step.request.headers || {})) {
+        if (DANGEROUS_KEYS.has(key)) continue;
         headers[key] = fillVars(step.request.headers![key], vars);
       }
 
@@ -225,6 +237,10 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
       // 4. Captures feed later steps even when assertions failed — a chain
       //    should report every broken step, not just the first.
       for (const name of Object.keys(step.capture || {})) {
+        if (DANGEROUS_KEYS.has(name)) {
+          failures.push(`capture: rejected reserved variable name "${name}"`);
+          continue;
+        }
         const value = extractPath(body, step.capture![name]);
         if (value === undefined) {
           failures.push(`capture: ${step.capture![name]} did not match anything`);

@@ -4,7 +4,7 @@ import * as http from 'http';
 import * as https from 'https';
 import * as path from 'path';
 import { URL } from 'url';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 
 /** `Error` with the `code` Node attaches to system errors (EADDRINUSE, ECONNREFUSED…). */
 type SystemError = Error & { code?: string };
@@ -22,6 +22,16 @@ import { ExpressGraphQLScanner } from '../express/ExpressGraphQLScanner';
 import { buildWsDocument, GatewayScanner } from '../websocket/GatewayScanner';
 import { buildGraphQLDocument, ResolverScanner } from '../graphql/ResolverScanner';
 
+/** Default proxy allowlist — loopback only. Exported for testing and tooling. */
+export function defaultProxyAllowHosts(extraHosts: string[] = []): Set<string> {
+  return new Set([
+    'localhost',
+    '127.0.0.1',
+    '::1',
+    ...extraHosts,
+  ]);
+}
+
 export interface StandaloneDocsOptions {
   sourcePath?: string;
   port?: number;
@@ -30,6 +40,21 @@ export interface StandaloneDocsOptions {
   baseUrl?: string;
   theme?: 'futuristic' | 'classic';
   primaryColor?: string;
+  /**
+   * Hosts the proxy is allowed to forward to. Defaults to loopback-only
+   * (`localhost`, `127.0.0.1`, `::1`). Use this to extend the allowlist when
+   * the backend listens on a LAN address or a known staging host.
+   *
+   * ⚠️ Never add public hosts and then expose the docs server itself to the
+   * internet — the proxy would become an open HTTP relay.
+   */
+  proxyAllowHosts?: string[];
+  /** @default true */
+  enableDocs?: boolean;
+  /** @default true */
+  enableProxy?: boolean;
+  /** @default true */
+  enableMock?: boolean;
   open?: boolean;
 }
 
@@ -131,6 +156,12 @@ export class StandaloneDocsServer {
     const proxyPrefix = '/__scramble_proxy';
     spec['x-scramble-proxy'] = proxyPrefix;
 
+    // Security: by default the proxy only forwards to loopback addresses. The
+    // standalone docs server is a local development convenience and should not
+    // be exposed to a network, but if it is, we must not turn it into an open
+    // HTTP relay. See SECURITY.md for guidance.
+    const proxyAllowHosts = defaultProxyAllowHosts(options.proxyAllowHosts);
+
     const html = renderDocsPage({
       specUrl: `./${docsPath}-json`,
       title: options.title ? `${options.title} — API Documentation` : undefined,
@@ -138,7 +169,10 @@ export class StandaloneDocsServer {
       primaryColor: options.primaryColor,
     });
 
-    const mock = new SpecMockServer(spec);
+    const enableDocs = options.enableDocs !== false;
+    const enableProxy = options.enableProxy !== false;
+    const enableMock = options.enableMock !== false;
+    const mock = enableMock ? new SpecMockServer(spec) : null;
     const mockPrefix = '/scramble-mock';
 
     this.server = http.createServer((req, res) => {
@@ -155,12 +189,17 @@ export class StandaloneDocsServer {
       }
 
       if (pathname === proxyPrefix || pathname.startsWith(`${proxyPrefix}/`)) {
-        this.proxy(req, res, baseUrl, url.slice(proxyPrefix.length) || '/');
+        if (!enableProxy) {
+          res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ statusCode: 404, message: 'Proxy is disabled.' }));
+          return;
+        }
+        this.proxy(req, res, baseUrl, url.slice(proxyPrefix.length) || '/', proxyAllowHosts);
         return;
       }
 
-      if (pathname === mockPrefix || pathname.startsWith(`${mockPrefix}/`)) {
-        const result = mock.handle(req.method || 'GET', pathname.slice(mockPrefix.length) || '/');
+      if (enableMock && (pathname === mockPrefix || pathname.startsWith(`${mockPrefix}/`))) {
+        const result = mock!.handle(req.method || 'GET', pathname.slice(mockPrefix.length) || '/');
         if (!result) {
           res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify({ statusCode: 404, message: `No documented route matches ${req.method} ${pathname.slice(mockPrefix.length) || '/'}` }));
@@ -174,7 +213,17 @@ export class StandaloneDocsServer {
       }
 
       if (url === `/${docsPath}` || url === `/${docsPath}/`) {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+        if (!enableDocs) {
+          res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ statusCode: 404, message: 'Docs UI is disabled.' }));
+          return;
+        }
+        res.writeHead(200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'X-Content-Type-Options': 'nosniff',
+          'X-Frame-Options': 'DENY',
+        });
         res.end(html);
       } else if (url === `/${docsPath}-json`) {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -193,9 +242,27 @@ export class StandaloneDocsServer {
 
     const port = await this.listenWithFallback(requestedPort, options.port === undefined);
     const url = `http://localhost:${port}/${docsPath}`;
-    ScrambleLogger.info(`Standalone docs server running at ${url}`);
-    ScrambleLogger.info(`Mock server: http://localhost:${port}${mockPrefix}  (e.g. ${mockPrefix}${Object.keys(spec.paths || {})[0] || '/'})`);
-    if (options.open) this.openBrowser(url);
+    ScrambleLogger.warn(
+      'Standalone docs server is intended for local development only — do not expose it to a network.',
+    );
+    if (enableDocs) {
+      ScrambleLogger.info(`Standalone docs server running at ${url}`);
+    } else {
+      ScrambleLogger.info('Standalone docs server running (docs UI disabled).');
+    }
+    if (enableMock) {
+      ScrambleLogger.info(`Mock server: http://localhost:${port}${mockPrefix}  (e.g. ${mockPrefix}${Object.keys(spec.paths || {})[0] || '/'})`);
+    } else {
+      ScrambleLogger.info('Mock server disabled.');
+    }
+    if (enableProxy) {
+      ScrambleLogger.info(
+        `Proxy allowlist: ${[...proxyAllowHosts].join(', ')}`,
+      );
+    } else {
+      ScrambleLogger.info('Proxy disabled.');
+    }
+    if (options.open && enableDocs) this.openBrowser(url);
   }
 
   /**
@@ -227,13 +294,29 @@ export class StandaloneDocsServer {
    * hop-by-hop headers are dropped; the backend's status, headers and body
    * reach the console untouched.
    */
-  private proxy(req: http.IncomingMessage, res: http.ServerResponse, baseUrl: string, pathWithQuery: string): void {
+  private proxy(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    baseUrl: string,
+    pathWithQuery: string,
+    allowHosts: Set<string>,
+  ): void {
     let target: URL;
     try {
       target = new URL(pathWithQuery, baseUrl.replace(/\/+$/, '') + '/');
     } catch {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ statusCode: 400, message: 'Invalid proxy target' }));
+      return;
+    }
+
+    if (!allowHosts.has(target.hostname)) {
+      res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        statusCode: 403,
+        message: `Proxy refused target ${target.hostname}`,
+        hint: `Allowed hosts: ${[...allowHosts].join(', ')}. Pass --proxy-allow-hosts to extend the allowlist, but never expose the docs server to the internet.`,
+      }));
       return;
     }
 
@@ -296,11 +379,20 @@ export class StandaloneDocsServer {
   }
 
   private openBrowser(url: string): void {
-    const command = process.platform === 'win32' ? `start "" "${url}"` : `open "${url}"`;
-    try {
-      exec(command);
-    } catch {
-      // Ignore browser-open failures.
+    // Only ever open a locally-served http URL to avoid turning the docs server
+    // into a command-injection vector. execFile with an argument list (no shell)
+    // prevents any shell metacharacters from being interpreted.
+    if (!/^https?:\/\/127\.0\.0\.1:\d+\/\S*$/.test(url)) {
+      return;
+    }
+
+    const platform = process.platform;
+    if (platform === 'win32') {
+      execFile('cmd', ['/c', 'start', '', url]);
+    } else if (platform === 'darwin') {
+      execFile('open', [url]);
+    } else {
+      execFile('xdg-open', [url]);
     }
   }
 }

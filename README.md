@@ -31,7 +31,7 @@ Every other tool makes you decorate your code to death: `@ApiProperty()`, `@ApiR
 |---|---|---|
 | Setup | Decorators on every DTO & route | **One CLI command** |
 | Return types | `@ApiResponse` per status | **Inferred — even `return { total, items }` with no annotation** |
-| Validation docs | `@ApiProperty` duplicating rules | **Read from `class-validator` automatically** |
+| Validation docs | `@ApiProperty` duplicating rules | **Read from `class-validator` automatically; reuses existing `@ApiProperty`/`@ApiOperation`/`@ApiTags` as hints** |
 | Error responses | Manual `@ApiResponse({ status: 404 })` | **Extracted from your `throw` statements** |
 | WebSockets | Not covered | **Scanned + live multi-user console** |
 | GraphQL | Separate tooling | **Scanned + live query console** |
@@ -69,11 +69,22 @@ Don't want to touch your app? Run a standalone docs server in **one command** fo
 
 ```bash
 npx nest-scramble serve          # auto-detects NestJS or Express — no flags needed
+npx nest-scramble serve --no-mock --no-proxy   # docs only, no forwarding or mock data
+npx nest-scramble serve --no-docs              # JSON specs + mock/proxy, no UI
 ```
 
 Then open `http://localhost:3001/docs`. The backend URL is read from your `.env` / `app.listen(...)`, "Try it" calls are proxied so CORS is never a problem, and `/scramble-mock/*` serves generated data for every documented route.
 
 Need a hosted copy? `npx nest-scramble export` writes a self-contained `docs-site/index.html` you can drop on GitHub Pages or S3.
+
+### Production defaults (v6.0.0+)
+
+The library is designed to be safe to leave installed in production:
+
+- The `/docs` UI and `/scramble-mock` endpoints are **disabled by default** in `NODE_ENV=production` or on common PaaS platforms.
+- To opt in explicitly: `NestScrambleModule.forRoot({ enableDocs: true, enableMock: true })`.
+- The standalone `serve` proxy only forwards to `localhost`/`127.0.0.1` by default; pass `--proxy-allow-hosts` to reach remote backends.
+- Every standalone feature is independently toggleable: `--no-docs`, `--no-proxy`, `--no-mock`. The docs page also ships `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY` by default.
 
 ---
 
@@ -392,9 +403,9 @@ Full history in the [CHANGELOG](CHANGELOG.md).
 
 ## Roadmap
 
-Shipped: OpenAPI 3.0 from static AST · Postman-style workspace · typed client SDK · Postman export · live mock server · incremental scanning · `class-validator` constraints · error responses from `throw` · breaking-change diff · docs doctor · drift detection · declarative scenarios + generation · WebSocket console (multi-user) · GraphQL console · environments & share links · GitHub Action · Express + Fastify, NestJS 10 + 11.
+Shipped: OpenAPI 3.0 from static AST · Postman-style workspace · typed client SDK · Postman export · live mock server · incremental scanning · `class-validator` constraints · error responses from `throw` · breaking-change diff · docs doctor · drift detection · declarative scenarios + generation · WebSocket console (multi-user) · GraphQL console · environments & share links · GitHub Action · Express + Fastify, NestJS 10 + 11 · `@nestjs/swagger` decorator hints · secure-by-default docs/mock/proxy.
 
-Next: Insomnia/Bruno export · scenario recording from real traffic · GraphQL subscription execution over WS.
+Next: Insomnia/Bruno export · scenario recording from real traffic · GraphQL subscription execution over WS · `nestjs-zod` DTO support · OpenAPI 3.1 option.
 
 ---
 
@@ -402,7 +413,7 @@ Next: Insomnia/Bruno export · scenario recording from real traffic · GraphQL s
 
 1. Fork the repository
 2. Create a feature branch
-3. Add tests for new behaviour (627 tests keep this project honest)
+3. Add tests for new behaviour (701 tests keep this project honest)
 4. Submit a pull request
 
 ## License

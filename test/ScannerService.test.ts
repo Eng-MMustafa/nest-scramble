@@ -2,10 +2,27 @@
  * Unit tests for the AST scanner — the core of the library, which shipped at
  * 0% coverage in v3.0.6.
  */
-import { ControllerInfo, MethodInfo, ScannerService } from '../src/scanner/ScannerService';
+import { assertSafeSourcePath, ControllerInfo, MethodInfo, ScannerService } from '../src/scanner/ScannerService';
 import { ScrambleLogger } from '../src/utils/ScrambleLogger';
 
 const FIXTURE_SOURCE = 'test/fixtures/sample-app';
+
+describe('assertSafeSourcePath', () => {
+  it('accepts relative paths inside the working directory', () => {
+    expect(() => assertSafeSourcePath('src')).not.toThrow();
+    expect(() => assertSafeSourcePath('src/app')).not.toThrow();
+  });
+
+  it('rejects relative paths that escape the working directory', () => {
+    expect(() => assertSafeSourcePath('..')).toThrow(/outside the working directory/);
+    expect(() => assertSafeSourcePath('src/../..')).toThrow(/outside the working directory/);
+  });
+
+  it('allows absolute paths', () => {
+    expect(() => assertSafeSourcePath('C:/absolute/path')).not.toThrow();
+    expect(() => assertSafeSourcePath('/absolute/path')).not.toThrow();
+  });
+});
 
 describe('ScannerService', () => {
   jest.setTimeout(120_000);

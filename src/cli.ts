@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PostmanCollectionGenerator } from './generators/PostmanCollectionGenerator';
 import { TypedClientGenerator } from './generators/TypedClientGenerator';
-import { ScannerService } from './scanner/ScannerService';
+import { assertSafeSourcePath, ScannerService } from './scanner/ScannerService';
 import { OpenApiTransformer } from './utils/OpenApiTransformer';
 import { diffSpecs } from './diff/SpecDiff';
 import { diagnose, formatDoctorReport } from './doctor/DocsDoctor';
@@ -44,7 +44,7 @@ const initCommand: CommandDef = {
 
 const serveCommand: CommandDef = {
   name: 'serve',
-  description: 'Start a standalone docs server for NestJS or Express projects',
+  description: 'Start a standalone docs server for NestJS or Express projects (local development only)',
   positionals: ['sourcePath'],
   options: [
     { key: 'port', long: '--port', short: '-p', placeholder: '<port>', default: '', description: 'Port for the docs server (default 3001, next free port if busy)' },
@@ -53,6 +53,10 @@ const serveCommand: CommandDef = {
     { key: 'apiVersion', long: '--apiVersion', short: '-v', placeholder: '<version>', default: '', description: 'API version' },
     { key: 'theme', long: '--theme', placeholder: '<theme>', default: 'futuristic', description: 'UI theme: futuristic (dark) or classic (light)' },
     { key: 'primaryColor', long: '--primary-color', placeholder: '<hex>', default: '', description: 'Primary accent colour' },
+    { key: 'proxyAllowHosts', long: '--proxy-allow-hosts', placeholder: '<hosts>', default: '', description: 'Comma-separated hosts the proxy may forward to (default: localhost/127.0.0.1/::1)' },
+    { key: 'noDocs', long: '--no-docs', boolean: true, description: 'Disable the docs UI and JSON endpoints' },
+    { key: 'noProxy', long: '--no-proxy', boolean: true, description: 'Disable the same-origin proxy for "Try it" calls' },
+    { key: 'noMock', long: '--no-mock', boolean: true, description: 'Disable the spec-driven mock server (/scramble-mock)' },
     { key: 'open', long: '--open', boolean: true, description: 'Open the docs in the default browser' },
   ],
 };
@@ -129,6 +133,7 @@ async function runGenerate(sourcePath: string, options: {
   apiVersion: string;
   globalPrefix: string;
 }): Promise<void> {
+  assertSafeSourcePath(sourcePath);
     try {
       console.log('\n' + '='.repeat(60));
       console.log('🚀 Nest-Scramble CLI');
@@ -335,8 +340,13 @@ async function runServe(sourcePath: string, options: {
   apiVersion: string;
   theme: string;
   primaryColor: string;
+  proxyAllowHosts: string;
+  noDocs: boolean;
+  noProxy: boolean;
+  noMock: boolean;
   open: boolean;
 }): Promise<void> {
+  assertSafeSourcePath(sourcePath);
   const { StandaloneDocsServer } = await import('./standalone/StandaloneDocsServer');
   const server = new StandaloneDocsServer();
   await server.start({
@@ -348,6 +358,12 @@ async function runServe(sourcePath: string, options: {
     version: options.apiVersion || undefined,
     theme: options.theme === 'classic' ? 'classic' : 'futuristic',
     primaryColor: options.primaryColor || undefined,
+    proxyAllowHosts: options.proxyAllowHosts
+      ? options.proxyAllowHosts.split(',').map((h) => h.trim()).filter(Boolean)
+      : undefined,
+    enableDocs: options.noDocs ? false : true,
+    enableProxy: options.noProxy ? false : true,
+    enableMock: options.noMock ? false : true,
     open: options.open,
   });
 }
@@ -364,6 +380,7 @@ async function runExport(sourcePath: string, options: {
   theme: string;
   primaryColor: string;
 }): Promise<void> {
+  assertSafeSourcePath(sourcePath);
   const { StandaloneDocsServer } = await import('./standalone/StandaloneDocsServer');
   const { StaticDocsExporter } = await import('./standalone/StaticDocsExporter');
   const docs = StandaloneDocsServer.buildDocuments({
@@ -415,6 +432,8 @@ function runDiff(
   head: string,
   options: { format: string; output?: string; failOnBreaking: boolean; globalPrefix: string },
 ): void {
+  assertSafeSourcePath(base);
+  assertSafeSourcePath(head);
       try {
         // Keep stdout clean so the report can be piped.
         ScrambleLogger.configure('error');
@@ -442,6 +461,7 @@ function runDiff(
 }
 
 function runDoctor(sourcePath: string, options: { json: boolean; minScore: string }): void {
+  assertSafeSourcePath(sourcePath);
   try {
     ScrambleLogger.configure('error');
 
@@ -544,6 +564,10 @@ async function runTest(
 ): Promise<void> {
   try {
     ScrambleLogger.configure('error');
+
+    if (options.spec) {
+      assertSafeSourcePath(options.spec);
+    }
 
     if (options.generate) {
       runGenerateScenarios(scenarioPath, options);

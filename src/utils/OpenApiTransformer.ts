@@ -68,6 +68,16 @@ export class OpenApiTransformer {
       description: controller.path ? `Routes under /${controller.path}` : 'Routes without a controller base path',
     }));
 
+    // Also register any additional tags from `@ApiTags()` so they appear in the
+    // spec even when they differ from the controller name.
+    for (const controller of controllers) {
+      for (const tagName of controller.tags ?? []) {
+        if (!tags.some(t => t.name === tagName)) {
+          tags.push({ name: tagName, description: '' });
+        }
+      }
+    }
+
     for (const controller of controllers) {
       for (const method of controller.methods) {
         const methodVersion = method.version || controller.version;
@@ -198,7 +208,9 @@ export class OpenApiTransformer {
     const operation: any = {
       operationId: `${controller.name}_${method.name}`,
       summary: method.summary || method.name,
-      tags: [this.getControllerTagName(controller)],
+      tags: controller.tags && controller.tags.length > 0
+        ? controller.tags
+        : [this.getControllerTagName(controller)],
       responses: {
         [successStatusCode]: isEmptyResponse
           ? { description: successDescription }
@@ -504,11 +516,13 @@ export class OpenApiTransformer {
     }
 
     if (type.enumValues && type.enumValues.length > 0) {
-      return {
+      const schema: any = {
         type: 'string',
         enum: type.enumValues,
         example: type.enumValues[0],
       };
+      if (type.description) schema.description = type.description;
+      return schema;
     }
 
     if (type.unionTypes) {
@@ -518,11 +532,13 @@ export class OpenApiTransformer {
     }
 
     if (type.format) {
-      return {
+      const schema: any = {
         type: type.type,
         format: type.format,
-        example: type.format === 'date-time' ? '2024-01-01T00:00:00.000Z' : 'sample',
+        example: type.example ?? (type.format === 'date-time' ? '2024-01-01T00:00:00.000Z' : 'sample'),
       };
+      if (type.description) schema.description = type.description;
+      return schema;
     }
 
     if (type.properties) {
@@ -538,7 +554,14 @@ export class OpenApiTransformer {
       return { $ref: `#/components/schemas/${this.registerSchema(baseName, schema)}` };
     }
 
-    return this.typeStringToSchema(type.type);
+    const schema = this.typeStringToSchema(type.type);
+    if (type.example !== undefined) {
+      schema.example = type.example;
+    }
+    if (type.description) {
+      schema.description = type.description;
+    }
+    return schema;
   }
 
   /**
