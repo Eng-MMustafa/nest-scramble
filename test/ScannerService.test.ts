@@ -2,7 +2,11 @@
  * Unit tests for the AST scanner — the core of the library, which shipped at
  * 0% coverage in v3.0.6.
  */
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { assertSafeSourcePath, ControllerInfo, MethodInfo, ScannerService } from '../src/scanner/ScannerService';
+import { resolveExistingPathWithinRoot } from '../src/utils/PathSecurity';
 import { ScrambleLogger } from '../src/utils/ScrambleLogger';
 
 const FIXTURE_SOURCE = 'test/fixtures/sample-app';
@@ -21,6 +25,41 @@ describe('assertSafeSourcePath', () => {
   it('allows absolute paths', () => {
     expect(() => assertSafeSourcePath('C:/absolute/path')).not.toThrow();
     expect(() => assertSafeSourcePath('/absolute/path')).not.toThrow();
+  });
+});
+
+describe('resolveExistingPathWithinRoot', () => {
+  let parent: string;
+  let root: string;
+  let outside: string;
+
+  beforeEach(() => {
+    parent = fs.mkdtempSync(path.join(os.tmpdir(), 'scramble-path-'));
+    root = path.join(parent, 'root');
+    outside = path.join(parent, 'outside');
+    fs.mkdirSync(root);
+    fs.mkdirSync(outside);
+    fs.writeFileSync(path.join(root, 'inside.ts'), 'export const inside = true;');
+    fs.writeFileSync(path.join(outside, 'secret.ts'), 'export const secret = true;');
+  });
+
+  afterEach(() => fs.rmSync(parent, { recursive: true, force: true }));
+
+  it('accepts existing files inside the allowed root', () => {
+    expect(resolveExistingPathWithinRoot(root, path.join(root, 'inside.ts')))
+      .toBe(fs.realpathSync(path.join(root, 'inside.ts')));
+  });
+
+  it('rejects traversal outside the allowed root', () => {
+    expect(() => resolveExistingPathWithinRoot(root, path.join(root, '..', 'outside', 'secret.ts')))
+      .toThrow(/outside the allowed root/);
+  });
+
+  it('rejects symlinks that escape the allowed root', () => {
+    const link = path.join(root, 'linked');
+    fs.symlinkSync(outside, link, process.platform === 'win32' ? 'junction' : 'dir');
+    expect(() => resolveExistingPathWithinRoot(root, path.join(link, 'secret.ts')))
+      .toThrow(/outside the allowed root/);
   });
 });
 

@@ -74,7 +74,7 @@ export class ExpressScanner {
     }
 
     const files = this.collectFiles(absolutePath);
-    const registry = new ExpressSymbolRegistry();
+    const registry = new ExpressSymbolRegistry(absolutePath);
     const bodies = new ExpressBodyInference(registry);
     const parsed = files.map((file) => this.parseFile(file, bodies, registry));
 

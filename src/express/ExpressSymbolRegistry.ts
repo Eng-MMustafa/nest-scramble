@@ -1,6 +1,7 @@
 /** Nest-Scramble | Developed by Mohamed Mustafa | MIT License **/
 import * as fs from 'fs';
 import * as path from 'path';
+import { resolveExistingPathWithinRoot } from '../utils/PathSecurity';
 import { balancedSlice, readExpression } from './ExpressLexical';
 
 export type SymbolKind = 'value' | 'interface' | 'type' | 'class' | 'enum';
@@ -32,6 +33,8 @@ interface FileInfo {
  */
 export class ExpressSymbolRegistry {
   private files = new Map<string, FileInfo>();
+
+  constructor(private readonly rootPath: string) {}
 
   /** Looks `name` (may be dotted: `schemas.CreateUser`) up starting in `fromFile`. */
   resolve(name: string, fromFile: string, depth = 0): SymbolDefinition | null {
@@ -182,16 +185,22 @@ export class ExpressSymbolRegistry {
   }
 
   private load(filePath: string): FileInfo | null {
-    const cached = this.files.get(filePath);
-    if (cached) return cached;
-    let text: string;
+    let safePath: string;
     try {
-      text = fs.readFileSync(filePath, 'utf-8');
+      safePath = resolveExistingPathWithinRoot(this.rootPath, filePath);
     } catch {
       return null;
     }
-    const info = this.index(text, filePath);
-    this.files.set(filePath, info);
+    const cached = this.files.get(safePath);
+    if (cached) return cached;
+    let text: string;
+    try {
+      text = fs.readFileSync(safePath, 'utf-8');
+    } catch {
+      return null;
+    }
+    const info = this.index(text, safePath);
+    this.files.set(safePath, info);
     return info;
   }
 
@@ -268,7 +277,8 @@ export class ExpressSymbolRegistry {
     ];
     for (const candidate of candidates) {
       try {
-        if (fs.statSync(candidate).isFile()) return candidate;
+        const safePath = resolveExistingPathWithinRoot(this.rootPath, candidate);
+        if (fs.statSync(safePath).isFile()) return safePath;
       } catch { /* try next */ }
     }
     return null;

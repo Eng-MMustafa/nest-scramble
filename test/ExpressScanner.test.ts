@@ -6,6 +6,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { ExpressScanner } from '../src/express/ExpressScanner';
 import { ExpressOpenApiTransformer } from '../src/express/ExpressOpenApiTransformer';
+import { ExpressSymbolRegistry } from '../src/express/ExpressSymbolRegistry';
 
 function makeProject(files: Record<string, string>): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'scramble-express-'));
@@ -115,6 +116,18 @@ describe('ExpressScanner', () => {
     const controllers = ExpressScanner.scan(path.join(root, 'src'));
     const route = controllers[0].routes[0];
     expect(Object.keys(route.bodySchema!.properties)).toEqual(['name', 'price', 'status']);
+  });
+
+  it('does not follow imports outside the scanned source root', () => {
+    const root = makeProject({
+      'src/route.ts': `import { Secret } from '../outside'; export const value: Secret = {};`,
+      'outside.ts': `export interface Secret { token: string }`,
+    });
+    roots.push(root);
+
+    const sourceRoot = path.join(root, 'src');
+    const registry = new ExpressSymbolRegistry(sourceRoot);
+    expect(registry.resolve('Secret', path.join(sourceRoot, 'route.ts'))).toBeNull();
   });
 });
 

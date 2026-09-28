@@ -2,6 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ts from 'typescript';
+import { resolveExistingPathWithinRoot } from '../utils/PathSecurity';
 
 /**
  * A thin project wrapper over the TypeScript compiler API.
@@ -35,22 +36,33 @@ export class TsProject {
 
   /** Recursively adds every `.ts` file below `dir`, skipping `node_modules`. */
   addSourceFilesInDirectory(dir: string): void {
-    const root = path.resolve(dir);
-    if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+    if (!fs.existsSync(dir)) return;
+
+    let root: string;
+    try {
+      root = resolveExistingPathWithinRoot(dir, dir);
+    } catch {
       return;
     }
+    if (!fs.statSync(root).isDirectory()) return;
 
     const stack: string[] = [root];
     while (stack.length > 0) {
       const current = stack.pop()!;
       for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
         const full = path.join(current, entry.name);
+        let safePath: string;
+        try {
+          safePath = resolveExistingPathWithinRoot(root, full);
+        } catch {
+          continue;
+        }
         if (entry.isDirectory()) {
           if (entry.name !== 'node_modules' && !entry.name.startsWith('.')) {
-            stack.push(full);
+            stack.push(safePath);
           }
         } else if (entry.isFile() && entry.name.endsWith('.ts')) {
-          this.fileNames.add(TsProject.normalizePath(full));
+          this.fileNames.add(TsProject.normalizePath(safePath));
         }
       }
     }

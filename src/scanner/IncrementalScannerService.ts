@@ -11,6 +11,7 @@ import {
   resolveSourcePath,
   ScannerService,
 } from './ScannerService';
+import { isPathInside, resolveExistingPathWithinRoot } from '../utils/PathSecurity';
 import { ScrambleLogger } from '../utils/ScrambleLogger';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -196,7 +197,12 @@ export class IncrementalScannerService {
       return [];
     }
 
-    const normalizedPath = path.normalize(filePath);
+    let normalizedPath: string;
+    try {
+      normalizedPath = path.normalize(resolveExistingPathWithinRoot(this.sourcePath, filePath));
+    } catch {
+      return [];
+    }
     const fileHash = this.cacheManager.calculateHash(normalizedPath);
     const fileSize = CacheManager.getFileSize(normalizedPath);
 
@@ -288,7 +294,8 @@ export class IncrementalScannerService {
     const results = new Map<string, ControllerInfo | null>();
 
     for (const event of events) {
-      const normalizedPath = path.normalize(event.filePath);
+      const normalizedPath = path.normalize(path.resolve(event.filePath));
+      if (!isPathInside(path.resolve(this.sourcePath), normalizedPath)) continue;
 
       if (event.type === 'unlink') {
         this.handleFileDelete(normalizedPath, affectedFiles);
