@@ -171,6 +171,9 @@ jobs:
     name: SonarCloud analysis
     runs-on: ubuntu-latest
     needs: [test]
+    # Pull requests are analysed without credentials; the token-bearing scan
+    # only runs on trusted pushes to the protected branches and release tags.
+    if: github.event_name == 'push'
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
