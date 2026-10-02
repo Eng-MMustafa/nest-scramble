@@ -1,3 +1,10 @@
+> [!IMPORTANT]
+> **This project has moved to SpecScribe** — same idea, rebuilt: zero-config API docs for NestJS, Express, Fastify and Hono.
+> **New repository:** https://github.com/Eng-MMustafa/specscribe · **npm:** https://www.npmjs.com/package/specscribe
+>
+> Move an existing project automatically: `npx nest-scramble migrate` — or `npm i specscribe`.
+> This repository is archived and no longer maintained.
+
 # 🚀 Nest-Scramble
 
 > **The zero-config API platform for NestJS** — living documentation, live consoles for REST + WebSocket + GraphQL, contract testing, drift detection and typed SDKs. All from static TypeScript analysis. **You never write a single annotation.**
